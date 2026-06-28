@@ -100,10 +100,10 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await page.getByTestId("tab-circuit-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText(/D FF|D_FF/);
   await expect(page.getByTestId("workbench")).toContainText(/OUTPUT|Z/);
-  await expect(page.getByTestId("circuit-view-topology")).toBeVisible();
-  await expect(page.getByTestId("circuit-view-schematic")).toBeVisible();
-  await expect(page.getByTestId("circuit-fit-button")).toBeVisible();
-  await page.getByTestId("circuit-view-schematic").click();
+  await expect(page.getByTestId("circuit-view-topology")).toHaveCount(0);
+  await expect(page.getByTestId("circuit-view-schematic")).toHaveCount(0);
+  await expect(page.getByTestId("circuit-fit-button")).toHaveCount(0);
+  await expect(page.getByTestId("standard-circuit-diagram")).toBeVisible();
   await expect(page.getByTestId("schematic-view")).toBeVisible();
   await expect(page.getByTestId("schematic-view")).toContainText("D FF Q0");
   await expect(page.getByTestId("schematic-view")).toContainText("D");
@@ -112,15 +112,9 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("schematic-view")).toContainText("CLK");
   await expect(page.getByTestId("schematic-view")).toContainText("Z");
   await expect(page.getByTestId("schematic-clk-arrow-ff_A")).toBeVisible();
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
-  const stateTableCircuitNodeLabels = await page
-    .getByTestId("circuit-diagram-svg")
-    .locator('[data-testid^="circuit-node-label-"]')
-    .allTextContents();
-  expect(stateTableCircuitNodeLabels).toContain("X");
-  expect(stateTableCircuitNodeLabels).toContain("D FF Q0");
-  expect(stateTableCircuitNodeLabels).toContain("Z");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("X");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("D FF Q0");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("Z");
 
   await page.getByTestId("tab-timing-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText("CLK");
@@ -139,7 +133,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).not.toContainText("Q_A#");
   await page.getByTestId("tab-circuit-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText(/T FF|T_FF/);
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-ff-T-Q0")).toBeVisible();
   await expect(page.getByTestId("schematic-clk-arrow-ff_A")).toBeVisible();
   await page.getByTestId("tab-timing-diagram").click();
@@ -159,14 +152,11 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).not.toContainText("Q_A#");
   await page.getByTestId("tab-circuit-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText(/JK FF|JK_FF/);
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-view")).toContainText("JK FF Q0");
   await expect(page.getByTestId("schematic-view")).toContainText("J");
   await expect(page.getByTestId("schematic-view")).toContainText("K");
   await expect(page.getByTestId("schematic-view")).toContainText("Q");
   await expect(page.getByTestId("schematic-view")).toContainText("Q0'");
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
   await page.getByTestId("tab-timing-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText("Q0");
   await expect(page.getByTestId("workbench")).not.toContainText(/Qa|Q_A/);
@@ -244,17 +234,25 @@ test("EDA workbench browser smoke", async ({ page }) => {
       Boolean(a && b && a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top);
     const svg = document.querySelector('[data-testid="state-diagram-svg"]')?.getBoundingClientRect();
     const s0Loop = box("state-edge-label-S0-S0-X0-Z0");
-    const forward = box("state-edge-S0-S1-X1-Z0");
-    const reverse = box("state-edge-S1-S0-X1-Z0");
+    const forwardPath = document.querySelector('[data-testid="state-edge-S0-S1-X1-Z0"] path')?.getAttribute("d");
+    const reversePath = document.querySelector('[data-testid="state-edge-S1-S0-X1-Z0"] path')?.getAttribute("d");
+    const forwardArrow = document.querySelector('[data-testid="state-edge-S0-S1-X1-Z0"] path')?.getAttribute("marker-end");
+    const reverseArrow = document.querySelector('[data-testid="state-edge-S1-S0-X1-Z0"] path')?.getAttribute("marker-end");
     const forwardLabel = box("state-edge-label-S0-S1-X1-Z0");
     const reverseLabel = box("state-edge-label-S1-S0-X1-Z0");
-    if (!svg || !s0Loop || !forward || !reverse || !forwardLabel || !reverseLabel) return false;
+    if (!svg || !s0Loop || !forwardPath || !reversePath || !forwardLabel || !reverseLabel) return false;
     const selfLoopLabelInside =
       s0Loop.left > svg.left + 4 &&
       s0Loop.right < svg.right - 4 &&
       s0Loop.top > svg.top + 4 &&
       s0Loop.bottom < svg.bottom - 4;
-    return selfLoopLabelInside && !overlaps(forward, reverse, -6) && !overlaps(forwardLabel, reverseLabel, 4);
+    return (
+      selfLoopLabelInside &&
+      forwardPath !== reversePath &&
+      forwardArrow?.includes("arrow-cyan") &&
+      reverseArrow?.includes("arrow-cyan") &&
+      !overlaps(forwardLabel, reverseLabel, 4)
+    );
   });
   expect(stateDiagramLabelsOk).toBe(true);
   await expect(page.getByTestId("workbench")).toContainText("Q1Q0 = 00");
@@ -262,11 +260,11 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).toContainText("Q1Q0 = 10");
   await expect(page.getByTestId("workbench")).not.toContainText(/Q_A|Q_B/);
   await page.getByTestId("tab-circuit-diagram").click();
-  await expect(page.getByTestId("circuit-view-topology")).toBeVisible();
-  await expect(page.getByTestId("circuit-view-schematic")).toBeVisible();
-  await expect(page.getByTestId("circuit-fit-button")).toBeVisible();
+  await expect(page.getByTestId("circuit-view-topology")).toHaveCount(0);
+  await expect(page.getByTestId("circuit-view-schematic")).toHaveCount(0);
+  await expect(page.getByTestId("circuit-fit-button")).toHaveCount(0);
   await expect(page.getByTestId("circuit-view-teacher")).toHaveCount(0);
-  await page.getByTestId("circuit-view-schematic").click();
+  await expect(page.getByTestId("standard-circuit-diagram")).toBeVisible();
   await expect(page.getByTestId("teacher-schematic-root")).toBeVisible();
   for (const id of [
     "teacher-rail-X",
@@ -440,9 +438,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
     );
   });
   expect(teacherReferenceLayoutOk).toBe(true);
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("teacher-schematic-root")).toBeVisible();
   await page.getByTestId("tab-timing-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText("Q1");
@@ -455,7 +450,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await page.getByTestId("compile-button").click();
   await expect(page.getByTestId("inspector-panel")).toContainText(/success|OK/i);
   await page.getByTestId("tab-circuit-diagram").click();
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-ff-JK-A")).toBeVisible();
   await expect(page.getByTestId("schematic-output-Y")).toBeVisible();
   await expect(page.getByTestId("schematic-constant-rail-1")).toBeVisible();
@@ -479,8 +473,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
     return outputInside && constantSeparate;
   });
   expect(jkSchematicLayoutIsInsidePanel).toBe(true);
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
 
   await page.getByLabel("FF Type").selectOption("SR");
   await page.getByTestId("mode-state-table").click();
@@ -505,7 +497,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).not.toContainText("Q_A#");
   await page.getByTestId("tab-circuit-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText(/SR FF|SR_FF/);
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-ff-SR-Q0")).toBeVisible();
   await expect(page.getByTestId("schematic-clk-arrow-ff_A")).toBeVisible();
   await page.getByTestId("tab-timing-diagram").click();
@@ -544,43 +535,31 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await page.getByTestId("tab-circuit-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText(/D FF|D_FF/);
   await expect(page.getByTestId("workbench")).toContainText(/OUTPUT|Z/);
-  await expect(page.getByTestId("circuit-fit-button")).toBeVisible();
-  await page.getByTestId("circuit-fit-button").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
+  await expect(page.getByTestId("circuit-fit-button")).toHaveCount(0);
+  await expect(page.getByTestId("standard-circuit-diagram")).toBeVisible();
+  await expect(page.getByTestId("schematic-view")).toBeVisible();
   const circuitFitsWorkbench = await page.evaluate(() => {
     const workbench = document.querySelector('[data-testid="workbench"]');
-    const svg = document.querySelector('[data-testid="circuit-diagram-svg"]');
+    const svg = document.querySelector('[data-testid="schematic-view"]');
     if (!workbench || !svg) return false;
     const workbenchBox = workbench.getBoundingClientRect();
     const svgBox = svg.getBoundingClientRect();
     return svgBox.left >= workbenchBox.left - 1 && svgBox.right <= workbenchBox.right + 1;
   });
   expect(circuitFitsWorkbench).toBe(true);
-  const timingCircuitNodeLabels = await page
-    .getByTestId("circuit-diagram-svg")
-    .locator('[data-testid^="circuit-node-label-"]')
-    .allTextContents();
-  expect(timingCircuitNodeLabels).toContain("D FF Q0");
-  expect(timingCircuitNodeLabels).toContain("Z");
-  expect(timingCircuitNodeLabels).not.toContain("X");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("D FF Q0");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("Z");
   await expect(page.getByTestId("unused-input-rail")).toContainText("Unused Inputs");
   await expect(page.getByTestId("unused-input-rail")).toContainText("X");
   await expect(page.getByTestId("unused-input-rail")).toContainText("optimized out");
   await expect(page.getByTestId("circuit-footer")).toContainText("Unused inputs: X");
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-view")).toContainText("D FF Q0");
   await expect(page.getByTestId("schematic-view")).toContainText("Z");
   await expect(page.getByTestId("schematic-view")).toContainText("Unused Inputs");
   await expect(page.getByTestId("schematic-view")).toContainText("X");
   await expect(page.getByTestId("schematic-view")).toContainText("optimized out");
   await expect(page.getByTestId("schematic-view")).not.toContainText("Q_A#");
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
-  const timingCircuitEdgeLabels = await page
-    .getByTestId("circuit-diagram-svg")
-    .locator('[data-testid^="circuit-edge-label-"]')
-    .allTextContents();
-  expect(timingCircuitEdgeLabels.some((label) => label.includes("Q0'") || label.includes("Q'"))).toBe(true);
+  await expect(page.getByTestId("schematic-view")).toContainText(/Q0'|Q'/);
   await expect(page.getByTestId("workbench")).not.toContainText(/"nodes"|"edges"/);
   await expect(page.getByTestId("workbench")).not.toContainText("Q_A#");
 
@@ -589,24 +568,15 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await page.getByTestId("compile-button").click();
   await expect(page.getByTestId("inspector-panel")).toContainText(/success|OK/i);
   await page.getByTestId("tab-circuit-diagram").click();
-  await expect(page.getByTestId("circuit-diagram-svg").locator('[data-testid="circuit-node-label-in_X"]')).toContainText("X");
-  const simplifyXCircuitNodeLabels = await page
-    .getByTestId("circuit-diagram-svg")
-    .locator('[data-testid^="circuit-node-label-"]')
-    .allTextContents();
-  expect(simplifyXCircuitNodeLabels).toContain("X");
-  expect(simplifyXCircuitNodeLabels).toContain("D FF Q0");
-  await expect(page.getByTestId("circuit-diagram-svg").locator('[data-from="in_X.OUT"][data-to$=".D"]')).toHaveCount(1);
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("X");
+  await expect(page.getByTestId("standard-circuit-diagram")).toContainText("D FF Q0");
   await expect(page.getByTestId("unused-input-rail")).toHaveCount(0);
   await expect(page.getByTestId("circuit-footer")).not.toContainText("Unused inputs: X");
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("schematic-view")).toContainText("X");
   await expect(page.getByTestId("schematic-view")).toContainText("D FF Q0");
   await expect(page.getByTestId("schematic-view")).toContainText("D0");
   await expect(page.getByTestId("schematic-view").locator('[data-testid="schematic-wire-X-ff_A-D"]')).toHaveCount(1);
   await expect(page.getByTestId("schematic-view").locator('[data-testid="unused-input-rail"]')).toHaveCount(0);
-  await page.getByTestId("circuit-view-topology").click();
-  await expect(page.getByTestId("circuit-diagram-svg")).toBeVisible();
 
   await page.getByTestId("mode-import-json").click();
   await page.getByLabel("import-json").fill(dThreeStateFixture);
@@ -621,7 +591,6 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).not.toContainText("Q_A#");
   await expect(page.getByTestId("workbench")).not.toContainText("Q_B#");
   await page.getByTestId("tab-circuit-diagram").click();
-  await page.getByTestId("circuit-view-schematic").click();
   await expect(page.getByTestId("d-schematic-root")).toBeVisible();
   await expect(page.getByTestId("schematic-gate-d-input-not")).toBeVisible();
   await expect(page.getByTestId("d-x-to-not-input")).toBeVisible();
@@ -791,6 +760,13 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("inspector-panel")).toContainText(/Debug Mode/i);
   await expect(page.getByTestId("debug-panel")).toBeVisible();
   await expect(page.getByTestId("debug-panel")).toContainText(/Inference Report/i);
+  await expect(page.getByTestId("debug-panel")).toContainText(/Raw Topology View/i);
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("used layout mode: auto-layout");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("respectRawCoordinates: false");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("collision count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show node bounding boxes");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show pin anchors");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show routing lanes");
 
   await page.getByTestId("mode-import-json").click();
   await page.getByLabel("import-json").fill(constantOutputFixture);

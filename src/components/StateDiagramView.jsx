@@ -72,7 +72,7 @@ function transitionMeta(transitions) {
     const parallelSpread = directedIndex * 14;
     return {
       ...transition,
-      edgeOffset: hasReverseOrParallel ? -(34 + parallelSpread) : 0,
+      edgeOffset: hasReverseOrParallel ? -(74 + parallelSpread) : 0,
       hasReverseOrParallel,
     };
   });
@@ -106,8 +106,8 @@ export default function StateDiagramView({ result, fsmModel }) {
   const transitions = transitionMeta(dedupeTransitions(result?.stateGraph?.transitions ?? []));
   const inferred = result?.metadata?.input_mode === "TIMING_TRACE";
   const conflicts = result?.debug?.inference_report?.conflicts ?? [];
-  const radius = 92;
-  const center = { x: 210, y: 150 };
+  const radius = 220;
+  const center = { x: 360, y: 280 };
   const positions = new Map(
     states.map((state, index) => {
       const angle = states.length <= 1 ? 0 : (Math.PI * 2 * index) / states.length - Math.PI / 2;
@@ -126,13 +126,13 @@ export default function StateDiagramView({ result, fsmModel }) {
         </div>
       )}
       <div className="overflow-auto p-4">
-        <svg className="min-h-[320px] min-w-[420px]" data-testid="state-diagram-svg" viewBox="0 0 420 300" role="img">
+        <svg className="min-h-[560px] min-w-[720px]" data-testid="state-diagram-svg" viewBox="0 0 720 560" role="img">
           <defs>
-            <marker id="arrow-cyan" markerHeight="8" markerWidth="8" orient="auto" refX="7" refY="4">
-              <path d="M0,0 L8,4 L0,8 Z" fill="#1D4ED8" />
+            <marker id="arrow-cyan" markerHeight="10" markerWidth="10" orient="auto" refX="9" refY="5">
+              <path d="M0,0 L10,5 L0,10 Z" fill="#1D4ED8" />
             </marker>
           </defs>
-          <rect fill="rgba(255,255,255,0.94)" height="300" rx="6" width="420" />
+          <rect fill="rgba(255,255,255,0.94)" height="560" rx="6" width="720" />
           {transitions.map((transition, index) => {
             const from = positions.get(transition.from) ?? center;
             const to = positions.get(transition.to) ?? center;
@@ -161,8 +161,8 @@ export default function StateDiagramView({ result, fsmModel }) {
                 y: from.y - tangent.y * 44 + outward.uy * 70,
               };
               const labelPoint = {
-                x: clamp(from.x + outward.ux * 72, 36, 384),
-                y: clamp(from.y + outward.uy * 58, 24, 276),
+                x: clamp(from.x + outward.ux * 92, 44, 676),
+                y: clamp(from.y + outward.uy * 78, 32, 528),
               };
               return (
                 <g data-testid={edgeTestId(transition)} key={`${transition.from}-${index}`}>

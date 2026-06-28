@@ -2469,7 +2469,6 @@ function renderTeacherStandardSchematic() {
 export default function CircuitDiagramView({ result, inputConfig }) {
   const containerRef = useRef(null);
   const [viewport, setViewport] = useState(DEFAULT_VIEWPORT);
-  const [viewMode, setViewMode] = useState("Topology");
   const rawNodes = result?.circuitLayout?.nodes ?? [];
   const rawEdges = (result?.circuitLayout?.edges ?? []).filter((edge) => {
     const text = `${edge.from} ${edge.to} ${edge.signal} ${edge.label}`.toUpperCase();
@@ -2480,10 +2479,7 @@ export default function CircuitDiagramView({ result, inputConfig }) {
     [rawEdges, rawNodes],
   );
   const nodes = useMemo(() => normalizeNodesForDisplay(visibleRawNodes), [visibleRawNodes]);
-  const nodeById = useMemo(() => new Map(nodes.map((node) => [node.id, node])), [nodes]);
   const edges = visibleEdges;
-  const bounds = useMemo(() => diagramBounds(nodes, edges, nodeById), [edges, nodeById, nodes]);
-  const transform = useMemo(() => fitTransform(bounds, viewport), [bounds, viewport]);
   const warnings = driverWarnings(rawNodes, rawEdges);
   const visibleTypes = Array.from(new Set(nodes.map((node) => nodeType(node)))).join(", ");
   const unusedInputLabels = unusedInputNodes.map((node) => formatTeacherLogicLabel(node.label ?? node.id, result)).join(", ");
@@ -2516,35 +2512,8 @@ export default function CircuitDiagramView({ result, inputConfig }) {
 
   return (
     <Panel
-      actions={
-        <div className="flex items-center gap-1">
-          {["Topology", "Schematic"].map((mode) => (
-            <button
-              className={`rounded border px-2 py-1 text-xs font-semibold transition ${
-                viewMode === mode
-                  ? "border-[var(--border-active)] bg-[var(--primary-soft)] text-[var(--primary)]"
-                  : "border-[var(--border-subtle)] text-[var(--text-muted)] hover:border-[var(--border-active)] hover:text-[var(--primary)]"
-              }`}
-              data-testid={mode === "Topology" ? "circuit-view-topology" : "circuit-view-schematic"}
-              key={mode}
-              onClick={() => setViewMode(mode)}
-              type="button"
-            >
-              {mode}
-            </button>
-          ))}
-          <button
-            className="rounded border border-[var(--border-active)] px-2 py-1 text-xs font-semibold text-[var(--primary)] hover:bg-[var(--primary-soft)]"
-            data-testid="circuit-fit-button"
-            onClick={syncViewport}
-            type="button"
-          >
-            Fit
-          </button>
-        </div>
-      }
       title="Circuit Diagram"
-      eyebrow={viewMode === "Schematic" ? "textbook schematic renderer" : "generated topology renderer"}
+      eyebrow="standard auto-layout renderer"
     >
       {warnings.length > 0 && (
         <div className="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--warning)]">
@@ -2553,55 +2522,13 @@ export default function CircuitDiagramView({ result, inputConfig }) {
       )}
       <div className="max-w-full overflow-auto p-4">
         <div ref={containerRef} className="min-w-0 max-w-full">
-          {viewMode === "Schematic" ? (
-            renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport })
-          ) : (
-            <svg
-          className="block max-w-full rounded border border-[var(--border-subtle)]"
-          data-testid="circuit-diagram-svg"
-          height={viewport.height}
-          role="img"
-          viewBox={`0 0 ${viewport.width} ${viewport.height}`}
-          width="100%"
-        >
-          <defs>
-            <filter id="wire-glow" x="-20%" y="-20%" width="140%" height="140%">
-              <feGaussianBlur result="blur" stdDeviation="2" />
-              <feMerge>
-                <feMergeNode in="blur" />
-                <feMergeNode in="SourceGraphic" />
-              </feMerge>
-            </filter>
-            <marker id="wire-arrow" markerHeight="7" markerWidth="7" orient="auto" refX="6" refY="3.5">
-              <path d="M0,0 L7,3.5 L0,7 Z" fill="#1D4ED8" />
-            </marker>
-          </defs>
-          <rect fill="rgba(255,255,255,0.96)" height={viewport.height} rx="8" width={viewport.width} />
-          {renderUnusedInputRail(unusedInputNodes, viewport)}
-          <g transform={`translate(${transform.x} ${transform.y}) scale(${transform.scale})`}>
-            <g fill="none" filter="url(#wire-glow)" stroke="#1D4ED8" strokeWidth="2">
-              {edges.map((edge, index) => {
-                const route = routeEdge(edge, nodeById);
-                if (!route) return null;
-                return (
-                  <g
-                    data-from={edge.from}
-                    data-testid={`circuit-edge-${index}`}
-                    data-to={edge.to}
-                    key={`${edge.from}-${edge.to}-${index}`}
-                  >
-                    <path d={route.path} markerEnd="url(#wire-arrow)" />
-                    <text data-testid={`circuit-edge-label-${index}`} fill="#64748B" fontSize="10" x={route.labelPoint.x} y={route.labelPoint.y}>
-                      {edgeDisplayLabel(edge, result)}
-                    </text>
-                  </g>
-                );
-              })}
-            </g>
-            {nodes.map((node) => renderNode(node, result))}
-          </g>
-          </svg>
-          )}
+          <div
+            data-layout-mode="auto-layout"
+            data-respect-raw-coordinates="false"
+            data-testid="standard-circuit-diagram"
+          >
+            {renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport })}
+          </div>
         </div>
         <div data-testid="circuit-footer" className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
           <span className="rounded border border-[var(--border-subtle)] px-2 py-1">Visible nodes: {nodes.length} / Raw nodes: {rawNodes.length}</span>
