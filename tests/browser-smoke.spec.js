@@ -643,6 +643,12 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("d-and-d1-q1-x")).toBeVisible();
   await expect(page.getByTestId("d-and-d1-q0-xnot")).toBeVisible();
   await expect(page.getByTestId("d-or-d1")).toBeVisible();
+  await expect(page.getByTestId("d-or-d1-input-and-q1-x")).toHaveCount(1);
+  await expect(page.getByTestId("d-or-d1-input-and-q0-xnot")).toHaveCount(1);
+  await expect(page.getByTestId("d-or-d1-input-q1-direct")).toHaveCount(0);
+  await expect(page.getByTestId("d-or-d1-input-x-direct")).toHaveCount(0);
+  await expect(page.getByTestId("d-or-d1-input-q0-direct")).toHaveCount(0);
+  await expect(page.getByTestId("d-or-d1-input-xnot-direct")).toHaveCount(0);
   await expect(page.getByTestId("d-or-d1-to-d1-pin")).toHaveCount(1);
   await expect(page.getByTestId("d-ff-q1-d1-pin")).toBeVisible();
   await expect(page.getByTestId("gate-input-count-guard")).toBeVisible();
@@ -741,6 +747,11 @@ test("EDA workbench browser smoke", async ({ page }) => {
       .filter(Boolean);
     const zLaneQ1 = bbox('[data-testid="d-z-or-input-q1"]');
     const zLaneQ0Xn = bbox('[data-testid="d-z-or-input-q0-xnot"]');
+    const d1InputFromAndQ1X = bbox('[data-testid="d-or-d1-input-and-q1-x"]');
+    const d1InputFromAndQ0Xn = bbox('[data-testid="d-or-d1-input-and-q0-xnot"]');
+    const andQ1X = bbox('[data-testid="d-and-d1-q1-x"]');
+    const andQ0Xn = bbox('[data-testid="d-and-d1-q0-xnot"]');
+    const orD1 = bbox('[data-testid="d-or-d1"]');
     const d1ToPin = bbox('[data-testid="d-or-d1-to-d1-pin"]');
     const d1Pin = bbox('[data-testid="d-ff-q1-d1-pin"]');
     const d1Q1Feedback = bbox('[data-testid="d-q1-feedback"]');
@@ -784,11 +795,18 @@ test("EDA workbench browser smoke", async ({ page }) => {
       d1PathChanged &&
       d1ToPin.height > 40 &&
       d1ToPin.x + d1ToPin.width >= d1Pin.x - 2;
+    const d1OrInputsComeFromAndOutputs =
+      d1InputFromAndQ1X && d1InputFromAndQ0Xn && andQ1X && andQ0Xn && orD1 &&
+      d1InputFromAndQ1X.x > andQ1X.x + andQ1X.width - 8 &&
+      d1InputFromAndQ0Xn.x > andQ0Xn.x + andQ0Xn.width - 8 &&
+      d1InputFromAndQ1X.x + d1InputFromAndQ1X.width >= orD1.x - 2 &&
+      d1InputFromAndQ0Xn.x + d1InputFromAndQ0Xn.width >= orD1.x - 2 &&
+      Math.abs((d1InputFromAndQ1X.y + d1InputFromAndQ1X.height / 2) - (d1InputFromAndQ0Xn.y + d1InputFromAndQ0Xn.height / 2)) > 18;
     const d1FeedbackKeptAwayFromZOr =
       outputOr && d1Q1Feedback && d1Q0Feedback &&
       d1Q1Feedback.x + d1Q1Feedback.width < outputOr.x - 70 &&
       d1Q0Feedback.x + d1Q0Feedback.width < outputOr.x - 70;
-    return Boolean(xNotDownstream && clkStaysOutsideFfs && outputAligned && inputLanesSeparated && zInputLanesSeparated && inputApproachGap && feedbackBusAway && invertedFeedbackKeptAway && d1OutputReroutedToPin && d1FeedbackKeptAwayFromZOr);
+    return Boolean(xNotDownstream && clkStaysOutsideFfs && outputAligned && inputLanesSeparated && zInputLanesSeparated && inputApproachGap && feedbackBusAway && invertedFeedbackKeptAway && d1OutputReroutedToPin && d1OrInputsComeFromAndOutputs && d1FeedbackKeptAwayFromZOr);
   });
   expect(dFinalRoutingQuality).toBe(true);
   const dSchematicQuality = await page.evaluate(() => {

@@ -1513,11 +1513,23 @@ function renderDReferenceSchematic({ result, viewport }) {
       id: "d-wire-and-q1x-to-or-d1",
       points: [[andQ1XOut.x, andQ1XOut.y], [474, andQ1XOut.y], [474, layout.orD1.y + 20], [layout.orD1.x, layout.orD1.y + 20]],
       arrow: false,
+      testSegments: [
+        {
+          id: "d-or-d1-input-and-q1-x",
+          points: [[andQ1XOut.x, andQ1XOut.y], [474, andQ1XOut.y], [474, layout.orD1.y + 20], [layout.orD1.x, layout.orD1.y + 20]],
+        },
+      ],
     },
     {
       id: "d-wire-and-q0xnot-to-or-d1",
       points: [[andQ0XnOut.x, andQ0XnOut.y], [488, andQ0XnOut.y], [488, layout.orD1.y + 48], [layout.orD1.x, layout.orD1.y + 48]],
       arrow: false,
+      testSegments: [
+        {
+          id: "d-or-d1-input-and-q0-xnot",
+          points: [[andQ0XnOut.x, andQ0XnOut.y], [488, andQ0XnOut.y], [488, layout.orD1.y + 48], [layout.orD1.x, layout.orD1.y + 48]],
+        },
+      ],
     },
     {
       id: "d-wire-D1-to-pin",
