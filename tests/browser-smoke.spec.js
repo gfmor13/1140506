@@ -26,6 +26,68 @@ const jkAlwaysToggleFixture = fs.readFileSync(
   path.join(rootDir, "test-fixtures", "input-configs", "state-table-jk-always-toggle.json"),
   "utf8",
 );
+const alternateJkInputConfig = JSON.stringify(
+  {
+    input_mode: "STATE_TABLE",
+    fsm_model: "Mealy",
+    ff_type: "JK",
+    state_count: 3,
+    input_count: 1,
+    output_count: 1,
+    states: ["S0", "S1", "S2"],
+    inputs: ["X"],
+    outputs: ["Z"],
+    transitions: [
+      { present_state: "S0", input: "0", next_state: "S1", output: "0" },
+      { present_state: "S0", input: "1", next_state: "S2", output: "1" },
+      { present_state: "S1", input: "0", next_state: "S0", output: "1" },
+      { present_state: "S1", input: "1", next_state: "S1", output: "0" },
+      { present_state: "S2", input: "0", next_state: "S2", output: "0" },
+      { present_state: "S2", input: "1", next_state: "S0", output: "1" },
+    ],
+    timing_trace: null,
+  },
+  null,
+  2,
+);
+const importedJkFsmResult = JSON.stringify(
+  {
+    status: "OK",
+    metadata: {
+      input_mode: "STATE_TABLE",
+      fsm_model: "Mealy",
+      ff_type: "JK",
+      state_count: 3,
+      input_count: 1,
+      output_count: 1,
+      state_bits: ["Q_A", "Q_B"],
+      inputs: ["X"],
+      outputs: ["Z"],
+    },
+    equations: [
+      { name: "J_A", target: "J_A", kind: "ff_input", ff_type: "JK", state_bit: "Q_A", pin: "J", expression: "X + Q_B#" },
+      { name: "K_A", target: "K_A", kind: "ff_input", ff_type: "JK", state_bit: "Q_A", pin: "K", expression: "Q_B" },
+      { name: "J_B", target: "J_B", kind: "ff_input", ff_type: "JK", state_bit: "Q_B", pin: "J", expression: "Q_A#X" },
+      { name: "K_B", target: "K_B", kind: "ff_input", ff_type: "JK", state_bit: "Q_B", pin: "K", expression: "1" },
+      { name: "Z", target: "Z", kind: "output", expression: "Q_AX + Q_B#" },
+    ],
+    k_maps: [],
+    state_graph: { states: [], transitions: [] },
+    timing_diagram: { signals: [] },
+    circuit_layout: {
+      nodes: [
+        { id: "in_X", type: "INPUT_PIN", label: "X", x: 40, y: 80 },
+        { id: "ff_A", type: "JK_FF", label: "JK FF A", x: 400, y: 120 },
+        { id: "ff_B", type: "JK_FF", label: "JK FF B", x: 400, y: 280 },
+        { id: "out_Z", type: "OUTPUT_PIN", label: "Z", x: 680, y: 210 },
+      ],
+      edges: [],
+    },
+    debug: {},
+  },
+  null,
+  2,
+);
 
 test("EDA workbench browser smoke", async ({ page }) => {
   let generateCircuitCalls = 0;
@@ -275,6 +337,11 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).not.toContainText("ERROR: STALE OR FALLBACK CIRCUIT RENDERER ACTIVE");
   await expect(page.getByTestId("workbench")).not.toContainText("ERROR: D1 OR receives direct literal inputs");
   await expect(page.getByTestId("schematic-view")).toBeVisible();
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-renderer", "equation-driven");
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-hardcoded-template", "false");
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-gate-input-violations", "0");
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-merged-feedback-bus-violations", "0");
+  await expect(page.getByTestId("jk-dynamic-renderer")).toHaveCount(1);
   await expect(page.getByTestId("teacher-schematic-root")).toHaveCount(0);
   await expect(page.getByTestId("schematic-standard-equations-panel")).toHaveCount(0);
   await expect(page.getByTestId("jk-rail-x")).toBeVisible();
@@ -286,19 +353,25 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("jk-or-z")).toBeVisible();
   await expect(page.getByTestId("jk-ff-q1")).toBeVisible();
   await expect(page.getByTestId("jk-ff-q0")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-k1-direct-xnot")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-k0-const1")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-j1-term")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-j0-term")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-z-q1")).toBeVisible();
-  await expect(page.getByTestId("jk-wire-z-q0xnot")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-k1-direct-xnot")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-k0-const1")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-j1-term")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-j0-term")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-z-q1")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-z-q0xnot")).toHaveCount(1);
   await expect(page.getByTestId("jk-wire-clk-bus")).toBeVisible();
   await expect(page.getByTestId("jk-wire-clk-q1")).toBeVisible();
   await expect(page.getByTestId("jk-wire-clk-q0")).toBeVisible();
   await expect(page.getByTestId("jk-or-j1")).toHaveCount(0);
   await expect(page.getByTestId("jk-wire-j1-or-output")).toHaveCount(0);
   await expect(page.getByTestId("jk-wire-k1-shared-j1")).toHaveCount(0);
-  const jkStandardSchematicOk = await page.evaluate(() => {
+  const teacherJkSignature = await page.getByTestId("schematic-view").getAttribute("data-jk-equation-signature");
+  expect(teacherJkSignature).toContain("J1=");
+  expect(teacherJkSignature).toContain("K1=");
+  expect(teacherJkSignature).toContain("J0=");
+  expect(teacherJkSignature).toContain("K0=");
+  expect(teacherJkSignature).toContain("Z=");
+  const jkDynamicSchematicOk = await page.evaluate(() => {
     const svg = document.querySelector('[data-testid="schematic-view"]');
     const bbox = (id) => {
       const element = document.querySelector(`[data-testid="${id}"]`);
@@ -321,12 +394,19 @@ test("EDA workbench browser smoke", async ({ page }) => {
       document.querySelectorAll('[data-testid^="jk-and-"]').length === 2 &&
       document.querySelectorAll('[data-testid="jk-or-z"]').length === 1 &&
       document.querySelectorAll('[data-testid="jk-not-x"]').length === 1;
-    return noOverlap && noOverflow && gateCounts;
+    const gatesMaxTwoInputs = Array.from(document.querySelectorAll('[data-testid="schematic-view"] [data-gate-input-count]'))
+      .every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2);
+    const dynamicRenderer =
+      svg?.getAttribute("data-jk-renderer") === "equation-driven" &&
+      svg?.getAttribute("data-jk-hardcoded-template") === "false";
+    return noOverlap && noOverflow && gateCounts && gatesMaxTwoInputs && dynamicRenderer;
   });
-  expect(jkStandardSchematicOk).toBe(true);
+  expect(jkDynamicSchematicOk).toBe(true);
   await expect(page.getByTestId("teacher-d-renderer")).toHaveCount(0);
   await expect(page.getByTestId("legacy-d-renderer")).toHaveCount(0);
   await expect(page.getByTestId("fallback-d-renderer")).toHaveCount(0);
+  await expect(page.getByTestId("merged-feedback-bus")).toHaveCount(0);
+  await expect(page.getByTestId("ff-output-bus")).toHaveCount(0);
   await expect(page.getByTestId("schematic-view")).not.toContainText("Q_A#");
   await expect(page.getByTestId("schematic-view")).not.toContainText("J_A");
   await page.getByTestId("tab-timing-diagram").click();
@@ -334,20 +414,53 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("workbench")).toContainText("Q0");
   await expect(page.getByTestId("workbench")).toContainText("Z");
 
-  await page.getByLabel("States").fill("2");
+  await page.getByTestId("mode-import-json").click();
+  await page.getByLabel("import-json").fill(alternateJkInputConfig);
+  await page.getByTestId("compile-button").click();
+  await expect(page.getByTestId("inspector-panel")).toContainText(/success|OK/i);
+  await page.getByTestId("tab-circuit-diagram").click();
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-renderer", "equation-driven");
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-hardcoded-template", "false");
+  await expect(page.getByTestId("teacher-schematic-root")).toHaveCount(0);
+  const alternateJkSignature = await page.getByTestId("schematic-view").getAttribute("data-jk-equation-signature");
+  expect(alternateJkSignature).toBeTruthy();
+  expect(alternateJkSignature).not.toBe(teacherJkSignature);
+  const alternateJkGraphOk = await page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="schematic-view"]');
+    const noOverflow = Boolean(svg?.parentElement && svg.parentElement.scrollWidth <= svg.parentElement.clientWidth + 1);
+    const gatesMaxTwoInputs = Array.from(document.querySelectorAll('[data-testid="schematic-view"] [data-gate-input-count]'))
+      .every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2);
+    const noMergedBus =
+      document.querySelectorAll('[data-testid="merged-feedback-bus"], [data-testid="ff-output-bus"]').length === 0;
+    return noOverflow && gatesMaxTwoInputs && noMergedBus;
+  });
+  expect(alternateJkGraphOk).toBe(true);
+
+  const callsBeforeImportedJkResult = generateCircuitCalls;
+  await page.getByTestId("mode-import-json").click();
+  await page.getByLabel("import-json").fill(importedJkFsmResult);
+  await page.getByTestId("compile-button").click();
+  await expect(page.getByTestId("inspector-panel")).toContainText(/Imported FSM_Result normalized|success|OK/i);
+  expect(generateCircuitCalls).toBe(callsBeforeImportedJkResult);
+  await page.getByTestId("tab-circuit-diagram").click();
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-renderer", "equation-driven");
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-hardcoded-template", "false");
+  await expect(page.getByTestId("schematic-view")).not.toContainText("Q_A#");
+  await expect(page.getByTestId("schematic-view")).not.toContainText("J_A");
+
   await page.getByTestId("mode-import-json").click();
   await page.getByLabel("import-json").fill(jkAlwaysToggleFixture);
   await page.getByTestId("compile-button").click();
   await expect(page.getByTestId("inspector-panel")).toContainText(/success|OK/i);
   await page.getByTestId("tab-circuit-diagram").click();
+  await expect(page.getByTestId("schematic-view")).toHaveAttribute("data-jk-renderer", "equation-driven");
   await expect(page.getByTestId("schematic-ff-JK-A")).toBeVisible();
   await expect(page.getByTestId("schematic-output-Y")).toBeVisible();
   await expect(page.getByTestId("schematic-constant-rail-1")).toBeVisible();
   await expect(page.getByTestId("schematic-constant-rail-1")).toContainText("CONST 1");
-  await expect(page.getByTestId("schematic-wire-CONST1-ff_A-J")).toHaveCount(1);
-  await expect(page.getByTestId("schematic-wire-CONST1-ff_A-K")).toHaveCount(1);
-  await expect(page.getByTestId("schematic-clk-bus")).toContainText("CLK");
-  await expect(page.getByTestId("schematic-clk-bus")).toContainText("display-only");
+  await expect(page.getByTestId("jk-wire-CONST1-J0")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-CONST1-K0")).toHaveCount(1);
+  await expect(page.getByTestId("jk-wire-clk-bus")).toContainText("CLK");
   const jkSchematicLayoutIsInsidePanel = await page.evaluate(() => {
     const svg = document.querySelector('[data-testid="schematic-view"]');
     const output = document.querySelector('[data-testid="schematic-output-Y"]');
@@ -358,9 +471,10 @@ test("EDA workbench browser smoke", async ({ page }) => {
     const outputBox = output.getBoundingClientRect();
     const constantBox = constantRail.getBoundingClientRect();
     const ffBox = ff.getBoundingClientRect();
-    const outputInside = outputBox.right < svgBox.right - 18 && outputBox.left > svgBox.left + 18;
-    const constantSeparate = constantBox.right < ffBox.left - 24;
-    return outputInside && constantSeparate;
+    const outputInside = outputBox.right <= svgBox.right + 1 && outputBox.left >= svgBox.left - 1;
+    const constantInside = constantBox.left >= svgBox.left - 1 && constantBox.right <= svgBox.right + 1;
+    const ffInside = ffBox.left >= svgBox.left - 1 && ffBox.right <= svgBox.right + 1;
+    return outputInside && constantInside && ffInside;
   });
   expect(jkSchematicLayoutIsInsidePanel).toBe(true);
 

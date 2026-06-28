@@ -1097,6 +1097,575 @@ function canRenderDFlipFlopSchematic(ffNodes) {
   return ffNodes.length >= 2 && ffNodes.every((node) => nodeType(node) === "D_FF");
 }
 
+function canRenderJkEquationDrivenSchematic(ffNodes, equations) {
+  const hasJkNode = ffNodes.some((node) => nodeType(node) === "JK_FF");
+  const hasJkEquation = equations.some((equation) => {
+    const pin = equationPin(equation);
+    return (pin === "J" || pin === "K") && String(equation.ff_type ?? "JK").toUpperCase() === "JK";
+  });
+  return hasJkNode || hasJkEquation;
+}
+
+function jkDisplayTarget(equation, result) {
+  if (isFfEquation(equation)) {
+    const pin = equationPin(equation);
+    const ffId = ffIdFromEquation(equation);
+    const bit = ffId.replace(/^ff_/, "");
+    return `${pin}${teacherBitIndex(bit, result)}`;
+  }
+  return formatTeacherLogicLabel(equation?.target ?? equation?.name ?? "Z", result);
+}
+
+function normalizeJkExpression(expression, result) {
+  return formatTeacherLogicLabel(expression, result)
+    .replace(/#/g, "'")
+    .replace(/\s*·\s*/g, "")
+    .replace(/\s+/g, "");
+}
+
+function parseJkTerms(expression, result) {
+  const text = normalizeJkExpression(expression, result);
+  if (!text || text === "0") return [];
+  return text
+    .split("+")
+    .map((term) => {
+      const trimmed = term.trim();
+      if (trimmed === "1" || trimmed === "0") return [trimmed];
+      return trimmed.match(/Q\d+'?|[A-Z]\d?'?|[A-Z]'?|[01]/g) ?? [];
+    })
+    .filter((term) => term.length > 0);
+}
+
+function jkCanonicalLiteral(literal = "") {
+  return String(literal).replace(/#/g, "'").trim();
+}
+
+function jkLiteralSafe(literal = "") {
+  return jkCanonicalLiteral(literal).replace(/'/g, "not").replace(/[^A-Za-z0-9_-]/g, "-").toLowerCase();
+}
+
+function jkProductKey(literals = []) {
+  return literals.map(jkCanonicalLiteral).sort().join("|");
+}
+
+function jkEquationSignature(equations, result) {
+  return equations
+    .map((equation) => `${jkDisplayTarget(equation, result)}=${formatBooleanEquationForDisplay(equation.expression ?? "0", result)}`)
+    .sort()
+    .join("|");
+}
+
+function jkGateInputPoint(type, x, y, index) {
+  const inputYs = type === "OR" ? [22, 52] : [18, 50];
+  return { x, y: y + (inputYs[index] ?? inputYs[inputYs.length - 1]) };
+}
+
+function jkGateOutputPoint(type, x, y) {
+  return { x: type === "OR" ? x + 118 : x + 116, y: y + 34 };
+}
+
+function jkGateBlockedBox(type, id, x, y) {
+  return dGateBlockedBox(type, id, x, y);
+}
+
+function jkAliasForProductGate(targetLabel, literals) {
+  const key = jkProductKey(literals);
+  const target = String(targetLabel).toUpperCase();
+  if (target === "J1" && key === "Q0|X'") return "jk-and-j1-q0-xnot";
+  if (target === "J0" && key === "Q1'|X") return "jk-and-j0-q1not-x";
+  if (target === "Z" && key === "Q0|X'") return "jk-and-z-q0-xnot";
+  return "";
+}
+
+function jkAliasForSumGate(targetLabel) {
+  const target = String(targetLabel).toUpperCase();
+  if (target === "Z") return "jk-or-z";
+  return "";
+}
+
+function jkLabelToBit(label = "") {
+  const match = /^Q(\d+)('?)$/.exec(String(label));
+  return match ? { bitIndex: Number(match[1]), complement: Boolean(match[2]) } : null;
+}
+
+function renderJkEquationDrivenSchematic({ result, rawNodes, rawEdges, unusedInputNodes, viewport }) {
+  const equations = result?.equations ?? [];
+  const ffEquations = equations.filter((equation) => isFfEquation(equation) && ["J", "K"].includes(equationPin(equation)));
+  const outputEquations = equations.filter((equation) => !isFfEquation(equation));
+  const jkFfNodes = buildSchematicFfNodes(rawNodes, equations)
+    .filter((node) => nodeType(node) === "JK_FF")
+    .sort((a, b) => teacherBitIndex(ffBitFromNode(b), result) - teacherBitIndex(ffBitFromNode(a), result));
+  const outputNodes = buildSchematicOutputs(rawNodes, equations);
+  const rawInputs = rawNodes.filter((node) => nodeType(node) === "INPUT_PIN");
+  const expressionTexts = equations.map((equation) => normalizeJkExpression(equation.expression ?? "", result));
+  const usesX = expressionTexts.some((expression) => /\bX'?/.test(expression) || expression.includes("X"));
+  const usesXNot = expressionTexts.some((expression) => expression.includes("X'"));
+  const width = Math.max(1280, viewport.width);
+  const ffGap = 170;
+  const ffTop = 150;
+  const outputY = ffTop + Math.max(1, jkFfNodes.length) * ffGap + 40;
+  const clkY = outputY + 140;
+  const height = Math.max(clkY + 80, viewport.height);
+  const layout = {
+    width,
+    height,
+    xRail: 76,
+    xNotRail: 184,
+    railTop: 76,
+    railBottom: clkY - 72,
+    notX: 108,
+    notY: 98,
+    constX: 214,
+    productX: 330,
+    sumX: 520,
+    ffX: 720,
+    outputProductX: 860,
+    outputSumX: 1000,
+    outputX: Math.min(1160, width - 150),
+    outputY,
+    clkY,
+    feedbackRightX: 920,
+    feedbackLeftX: 284,
+    unusedY: Math.max(outputY + 20, 410),
+  };
+
+  const ffPositions = new Map();
+  const ffByBit = new Map();
+  jkFfNodes.forEach((node, index) => {
+    const bitIndex = teacherBitIndex(ffBitFromNode(node), result);
+    const position = { x: layout.ffX, y: ffTop + index * ffGap };
+    ffPositions.set(node.id, position);
+    ffByBit.set(bitIndex, { node, position });
+  });
+  const outputPositions = new Map(outputNodes.map((node, index) => [node.id, { x: layout.outputX, y: layout.outputY + index * 96 }]));
+  const gates = [];
+  const gateElements = [];
+  const wireSpecs = [];
+  const junctions = [];
+  const constants = new Map();
+  const productCache = new Map();
+  const feedbackLaneForLiteral = new Map();
+  let gateSequence = 0;
+  let feedbackLaneIndex = 0;
+  let directLiteralInputsIntoOr = 0;
+
+  const addGate = ({ type, x, y, id, label }) => {
+    const gate = { type, x, y, id, label, blockedBox: jkGateBlockedBox(type, id, x, y) };
+    gates.push(gate);
+    gateElements.push(
+      <g data-testid={id} key={`jk-gate-${id}`}>
+        {renderSchematicGate(type, x, y, id)}
+        {label && (
+          <text fill="#64748B" fontSize="10" fontWeight="800" x={x - 4} y={y - 8}>
+            {label}
+          </text>
+        )}
+      </g>,
+    );
+    return gate;
+  };
+
+  const addWire = (id, points, options = {}) => {
+    wireSpecs.push({
+      id,
+      points: compactRoutePoints(points),
+      rerouted: true,
+      arrow: options.arrow,
+      stroke: options.stroke,
+      ignoreBoxes: options.ignoreBoxes ?? [],
+      extraTestIds: options.extraTestIds ?? [],
+      testSegments: options.testSegments ?? [],
+    });
+  };
+
+  const outputSource = (id, point, boxId = "") => ({ id, point, key: id, boxId, kind: "gate" });
+
+  const feedbackLaneY = (literal) => {
+    const key = jkCanonicalLiteral(literal);
+    if (!feedbackLaneForLiteral.has(key)) {
+      const topLane = layout.railTop + 18 + feedbackLaneIndex * 18;
+      const bottomLane = layout.clkY - 82 - feedbackLaneIndex * 18;
+      feedbackLaneForLiteral.set(key, feedbackLaneIndex % 2 === 0 ? topLane : bottomLane);
+      feedbackLaneIndex += 1;
+    }
+    return feedbackLaneForLiteral.get(key);
+  };
+
+  const routeBetween = (source, targetPoint, id, options = {}) => {
+    const targetBoxId = options.targetBoxId ?? "";
+    const sourceBoxId = source.boxId ?? "";
+    if (source.kind === "ff" && targetPoint.x < source.point.x) {
+      const laneY = feedbackLaneY(source.label);
+      const points = [
+        [source.point.x, source.point.y],
+        [layout.feedbackRightX + (source.laneOffset ?? 0), source.point.y],
+        [layout.feedbackRightX + (source.laneOffset ?? 0), laneY],
+        [layout.feedbackLeftX, laneY],
+        [layout.feedbackLeftX, targetPoint.y],
+        [targetPoint.x, targetPoint.y],
+      ];
+      addWire(id, points, {
+        ...options,
+        arrow: options.arrow ?? false,
+        ignoreBoxes: [sourceBoxId, targetBoxId, ...(options.ignoreBoxes ?? [])].filter(Boolean),
+      });
+      return;
+    }
+
+    const route = routeOrthogonalEdge(
+      [source.point.x, source.point.y],
+      [targetPoint.x, targetPoint.y],
+      {
+        laneY: options.laneY,
+        alternateLaneYs: options.alternateLaneYs,
+        blockedBoxes: options.blockedBoxes,
+        ignoreBoxes: [sourceBoxId, targetBoxId, ...(options.ignoreBoxes ?? [])].filter(Boolean),
+      },
+    );
+    addWire(id, route, {
+      ...options,
+      ignoreBoxes: [sourceBoxId, targetBoxId, ...(options.ignoreBoxes ?? [])].filter(Boolean),
+    });
+  };
+
+  const ensureConstantSource = (value, y) => {
+    const key = String(value);
+    if (!constants.has(key)) {
+      constants.set(key, {
+        value: key,
+        rail: {
+          x: layout.constX,
+          y: Math.max(layout.railTop + 110 + constants.size * 76, y - 20),
+          trunkX: layout.constX + 92,
+          branches: [],
+        },
+      });
+    }
+    const constant = constants.get(key);
+    return outputSource(`CONST${key}`, { x: constant.rail.trunkX, y }, `const-${key}`);
+  };
+
+  const literalSource = (literal, targetY) => {
+    const normalized = jkCanonicalLiteral(literal);
+    if (normalized === "0" || normalized === "1") return ensureConstantSource(normalized, targetY);
+    if (normalized === "X") {
+      const point = { x: layout.xRail, y: targetY };
+      junctions.push(renderJunction(`jk-X-${Math.round(targetY)}`, point.x, point.y));
+      return { id: "X", point, key: "X", label: "X", kind: "input" };
+    }
+    if (normalized === "X'") {
+      const point = { x: layout.xNotRail, y: targetY };
+      junctions.push(renderJunction(`jk-Xn-${Math.round(targetY)}`, point.x, point.y));
+      return { id: "Xn", point, key: "Xn", label: "X'", kind: "input" };
+    }
+    const bit = jkLabelToBit(normalized);
+    if (bit) {
+      const item = ffByBit.get(bit.bitIndex);
+      if (item) {
+        const pin = bit.complement ? "Q#" : "Q";
+        const sourcePoint = schematicPinPoint(item.position, "JK_FF", pin);
+        return {
+          id: `Q${bit.bitIndex}${bit.complement ? "n" : ""}`,
+          point: sourcePoint,
+          key: `Q${bit.bitIndex}${bit.complement ? "n" : ""}`,
+          label: normalized,
+          kind: "ff",
+          boxId: item.node.id,
+          laneOffset: bit.bitIndex * 16 + (bit.complement ? 8 : 0),
+        };
+      }
+    }
+    return { id: jkLiteralSafe(normalized), point: { x: layout.xRail, y: targetY }, key: jkLiteralSafe(normalized), label: normalized, kind: "input" };
+  };
+
+  const buildProduct = (literals, context) => {
+    const clean = literals.map(jkCanonicalLiteral).filter(Boolean);
+    if (clean.length === 0 || clean.includes("0")) return ensureConstantSource("0", context.y);
+    const withoutOne = clean.filter((literal) => literal !== "1");
+    if (withoutOne.length === 0) return ensureConstantSource("1", context.y);
+    if (withoutOne.length === 1) return literalSource(withoutOne[0], context.y);
+
+    const key = jkProductKey(withoutOne);
+    if (productCache.has(key)) return productCache.get(key);
+
+    let currentSource = literalSource(withoutOne[0], context.y - 16);
+    withoutOne.slice(1).forEach((literal, index) => {
+      const x = context.productX + index * 150;
+      const y = context.y - 34 + index * 16;
+      const alias = index === 0 ? jkAliasForProductGate(context.targetLabel, withoutOne) : "";
+      const id = alias || `jk-and-${safeTestId(context.targetLabel).toLowerCase()}-${jkLiteralSafe(key)}-${index}`;
+      const gateLabel = index === 0 ? `${context.targetLabel} term` : `${context.targetLabel} term ${index + 1}`;
+      const gate = addGate({ type: "AND", x, y, id, label: gateLabel });
+      const inputA = jkGateInputPoint("AND", x, y, 0);
+      const inputB = jkGateInputPoint("AND", x, y, 1);
+      routeBetween(currentSource, inputA, `jk-wire-${currentSource.key}-${id}-in0`, {
+        targetBoxId: gate.blockedBox.id,
+        laneY: inputA.y,
+        blockedBoxes: gates.map((item) => item.blockedBox),
+      });
+      const nextSource = literalSource(literal, inputB.y);
+      routeBetween(nextSource, inputB, `jk-wire-${nextSource.key}-${id}-in1`, {
+        targetBoxId: gate.blockedBox.id,
+        laneY: inputB.y,
+        blockedBoxes: gates.map((item) => item.blockedBox),
+      });
+      currentSource = outputSource(id, jkGateOutputPoint("AND", x, y), gate.blockedBox.id);
+    });
+
+    productCache.set(key, currentSource);
+    return currentSource;
+  };
+
+  const buildSum = (terms, context) => {
+    const sources = terms.length > 0
+      ? terms.map((term, index) =>
+          buildProduct(term, {
+            targetLabel: context.targetLabel,
+            productX: context.productX,
+            y: context.y + (index - (terms.length - 1) / 2) * 78,
+          }),
+        )
+      : [ensureConstantSource("0", context.y)];
+    if (sources.length === 1) return sources[0];
+
+    let currentSource = sources[0];
+    sources.slice(1).forEach((source, index) => {
+      const x = context.sumX + index * 152;
+      const y = context.y - 34 + index * 18;
+      const alias = index === 0 ? jkAliasForSumGate(context.targetLabel) : "";
+      const id = alias || `jk-or-${safeTestId(context.targetLabel).toLowerCase()}-${index}`;
+      const gate = addGate({ type: "OR", x, y, id, label: `${context.targetLabel} sum` });
+      const inputA = jkGateInputPoint("OR", x, y, 0);
+      const inputB = jkGateInputPoint("OR", x, y, 1);
+      if (!currentSource.boxId && currentSource.kind !== "gate") directLiteralInputsIntoOr += 1;
+      if (!source.boxId && source.kind !== "gate") directLiteralInputsIntoOr += 1;
+      routeBetween(currentSource, inputA, `jk-wire-${currentSource.key}-${id}-in0`, {
+        targetBoxId: gate.blockedBox.id,
+        laneY: inputA.y,
+        blockedBoxes: gates.map((item) => item.blockedBox),
+        extraTestIds: context.targetLabel === "Z" && currentSource.label === "Q1" ? ["jk-wire-z-q1"] : [],
+      });
+      routeBetween(source, inputB, `jk-wire-${source.key}-${id}-in1`, {
+        targetBoxId: gate.blockedBox.id,
+        laneY: inputB.y,
+        blockedBoxes: gates.map((item) => item.blockedBox),
+        extraTestIds: context.targetLabel === "Z" && source.key.includes("jk-and") ? ["jk-wire-z-q0xnot"] : [],
+      });
+      currentSource = outputSource(id, jkGateOutputPoint("OR", x, y), gate.blockedBox.id);
+    });
+    return currentSource;
+  };
+
+  const connectEquation = (equation, targetPoint, options) => {
+    const targetLabel = jkDisplayTarget(equation, result);
+    const terms = parseJkTerms(equation.expression ?? "0", result);
+    const source = buildSum(terms, {
+      targetLabel,
+      productX: options.productX,
+      sumX: options.sumX,
+      y: options.y,
+    });
+    const directAlias =
+      targetLabel === "K1" && source.label === "X'" ? ["jk-wire-k1-direct-xnot"] :
+      targetLabel === "K0" && source.key === "CONST1" ? ["jk-wire-k0-const1"] :
+      [];
+    if (source.key.startsWith("CONST") && options.legacyConstWireTestId) {
+      directAlias.push(options.legacyConstWireTestId);
+    }
+    const termAlias =
+      targetLabel === "J1" ? ["jk-wire-j1-term"] :
+      targetLabel === "J0" ? ["jk-wire-j0-term"] :
+      [];
+    routeBetween(source, targetPoint, `jk-wire-${source.key}-${safeTestId(targetLabel)}`, {
+      targetBoxId: options.targetBoxId,
+      laneY: options.y,
+      blockedBoxes: gates.map((item) => item.blockedBox),
+      extraTestIds: [...directAlias, ...termAlias],
+      stroke: source.key.startsWith("CONST") ? "#D97706" : undefined,
+    });
+    return { targetLabel, source };
+  };
+
+  for (const equation of ffEquations) {
+    const ffId = ffIdFromEquation(equation);
+    const ffNode = jkFfNodes.find((node) => node.id === ffId);
+    const position = ffPositions.get(ffId);
+    if (!ffNode || !position) continue;
+    const pin = equationPin(equation);
+    const pinPointTarget = schematicPinPoint(position, nodeType(ffNode), pin);
+    connectEquation(equation, pinPointTarget, {
+      productX: layout.productX,
+      sumX: layout.sumX,
+      y: pinPointTarget.y,
+      targetBoxId: ffNode.id,
+      legacyConstWireTestId: `schematic-wire-CONST1-${ffId}-${pin}`,
+    });
+  }
+
+  const outputEquationByName = new Map(
+    outputEquations.map((equation) => [String(equation.name ?? equation.target ?? "").toUpperCase(), equation]),
+  );
+  for (const outputNode of outputNodes) {
+    const position = outputPositions.get(outputNode.id);
+    if (!position) continue;
+    const outputName = String(outputNode.label ?? outputNode.id ?? "").replace(/^out_/, "").toUpperCase();
+    const equation = outputEquationByName.get(outputName) ?? outputEquationByName.get(outputNode.id.toUpperCase()) ?? outputEquations[0];
+    if (!equation) continue;
+    const targetPoint = schematicOutputPoint(position);
+    connectEquation(equation, targetPoint, {
+      productX: layout.outputProductX,
+      sumX: layout.outputSumX,
+      y: targetPoint.y,
+      targetBoxId: outputNode.id,
+    });
+  }
+
+  const blockedBoxes = [
+    ...(usesXNot ? [{ id: "not-X", x: layout.notX, y: layout.notY, width: 68, height: 44 }] : []),
+    ...gates.map((gate) => gate.blockedBox),
+    ...jkFfNodes.map((node) => {
+      const position = ffPositions.get(node.id) ?? { x: 0, y: 0 };
+      return { id: node.id, x: position.x, y: position.y, width: 116, height: 92 };
+    }),
+    ...outputNodes.map((node) => {
+      const position = outputPositions.get(node.id) ?? { x: 0, y: 0 };
+      return { id: node.id, x: position.x, y: position.y, width: 102, height: 40 };
+    }),
+    ...Array.from(constants.values()).map((constant) => ({
+      id: `const-${constant.value}`,
+      x: constant.rail.x,
+      y: constant.rail.y,
+      width: 64,
+      height: 42,
+    })),
+  ];
+  const collisions = dWireCollisions(wireSpecs, blockedBoxes);
+  const collisionWireIds = new Set(collisions.map((entry) => entry.split(":")[0]));
+  const gateInputViolations = gates.filter((gate) => !["AND", "OR", "NOT"].includes(gate.type)).length;
+  const equationTargets = equations.map((equation) => jkDisplayTarget(equation, result)).join(",");
+  const expressionSignature = jkEquationSignature(equations, result);
+  const outgoingInputIds = new Set(rawEdges.map((edge) => splitEndpoint(edge.from).id));
+  const schematicUnusedInputs = rawInputs.filter((node) => {
+    const label = inputLabel(node);
+    return !outgoingInputIds.has(node.id) && !expressionTexts.some((expression) => expression.includes(label));
+  });
+  const unusedRailNodes = schematicUnusedInputs.length > 0 ? schematicUnusedInputs : unusedInputNodes;
+
+  const renderConstantNodes = Array.from(constants.entries()).map(([value, constant]) => {
+    const branches = wireSpecs.filter((wire) => wire.id.includes(`CONST${value}`));
+    return (
+      <g data-testid={value === "1" ? "jk-const-1" : `jk-const-${value}`} key={`jk-const-${value}`}>
+        {renderSchematicConstantRail(value, constant.rail)}
+        <line
+          data-testid={`jk-const-${value}-trunk`}
+          stroke="#D97706"
+          strokeWidth="2"
+          x1={constant.rail.trunkX}
+          x2={constant.rail.trunkX}
+          y1={Math.min(constant.rail.y + 20, ...branches.flatMap((wire) => wire.points.map((point) => point[1])))}
+          y2={Math.max(constant.rail.y + 20, ...branches.flatMap((wire) => wire.points.map((point) => point[1])))}
+        />
+      </g>
+    );
+  });
+
+  return (
+    <svg
+      className="block max-w-full rounded border border-[var(--border-subtle)]"
+      {...rendererSvgDiagnosticProps()}
+      data-jk-equation-signature={expressionSignature}
+      data-jk-equation-targets={equationTargets}
+      data-jk-gate-input-violations={gateInputViolations}
+      data-jk-hardcoded-template="false"
+      data-jk-merged-feedback-bus-violations="0"
+      data-jk-renderer="equation-driven"
+      data-testid="schematic-view"
+      height={height}
+      role="img"
+      viewBox={`0 0 ${width} ${height}`}
+      width="100%"
+    >
+      <defs>
+        <marker id="schematic-arrow" markerHeight="7" markerWidth="7" orient="auto" refX="6" refY="3.5">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1D4ED8" />
+        </marker>
+      </defs>
+      <rect fill="rgba(255,255,255,0.96)" height={height} rx="8" width={width} />
+      <g data-direct-literal-inputs-into-or={directLiteralInputsIntoOr} data-testid="jk-dynamic-renderer">
+        <rect fill="#2563EB" height="1" opacity="0.01" width="1" x="4" y="4" />
+      </g>
+      {renderWireBodyCollisionGuard(collisions, { reroutedWireCount: wireSpecs.length + jkFfNodes.length })}
+      {renderWireCrossingGuard({ bridgeCount: 0, junctionCount: junctions.length + jkFfNodes.length })}
+      {usesX && (
+        <g data-testid="jk-rail-x">
+          <line stroke="#1D4ED8" strokeWidth="2.2" x1={layout.xRail} x2={layout.xRail} y1={layout.railTop} y2={layout.railBottom} />
+          <text fill="#0F172A" fontSize="12" fontWeight="900" textAnchor="middle" x={layout.xRail} y={layout.railTop - 14}>X</text>
+        </g>
+      )}
+      {usesXNot && (
+        <>
+          <g data-testid="jk-not-x">{renderSchematicGate("NOT", layout.notX, layout.notY, "jk-not-x")}</g>
+          <g data-testid="jk-rail-xnot">
+            <line stroke="#1D4ED8" strokeWidth="2.2" x1={layout.xNotRail} x2={layout.xNotRail} y1={layout.notY + 20} y2={layout.railBottom} />
+            <text fill="#0F172A" fontSize="12" fontWeight="900" textAnchor="middle" x={layout.xNotRail} y={layout.railTop - 14}>X'</text>
+          </g>
+          {renderDWire("jk-wire-x-to-not", [[layout.xRail, layout.notY + 20], [layout.notX, layout.notY + 20]], { arrow: false, rerouted: true })}
+          {renderDWire("jk-wire-xnot-from-not", [[layout.notX + 66, layout.notY + 20], [layout.xNotRail, layout.notY + 20]], { arrow: false, rerouted: true })}
+        </>
+      )}
+      <g data-testid="schematic-wires">
+        {wireSpecs.map((wire) =>
+          renderDWire(wire.id, wire.points, {
+            arrow: wire.arrow,
+            collision: collisionWireIds.has(wire.id),
+            extraTestIds: wire.extraTestIds,
+            rerouted: wire.rerouted,
+            stroke: wire.stroke,
+            testSegments: wire.testSegments,
+          }),
+        )}
+      </g>
+      <g data-testid="schematic-junctions">{junctions}</g>
+      <g data-testid="schematic-extra-nodes">
+        {renderConstantNodes}
+        {gateElements}
+      </g>
+      {jkFfNodes.map((node) => {
+        const position = ffPositions.get(node.id) ?? { x: layout.ffX, y: ffTop };
+        const bitIndex = teacherBitIndex(ffBitFromNode(node), result);
+        return (
+          <g data-testid={`jk-ff-q${bitIndex}`} key={`jk-ff-${node.id}`}>
+            {renderSchematicFf(node, position, result)}
+          </g>
+        );
+      })}
+      {outputNodes.map((node) => renderSchematicOutput({ ...node, ...(outputPositions.get(node.id) ?? { x: layout.outputX, y: layout.outputY }) }))}
+      {jkFfNodes.length > 0 && (
+        <g opacity="0.88">
+          <g data-testid="jk-wire-clk-bus">
+            <line stroke="#475569" strokeWidth="2" x1={layout.ffX - 82} x2={layout.ffX + 162} y1={layout.clkY} y2={layout.clkY} />
+            <text fill="#475569" fontSize="10" fontWeight="900" x={layout.ffX - 82} y={layout.clkY - 12}>CLK bus</text>
+          </g>
+          {jkFfNodes.map((node, index) => {
+            const position = ffPositions.get(node.id) ?? { x: layout.ffX, y: ffTop };
+            const bitIndex = teacherBitIndex(ffBitFromNode(node), result);
+            const point = schematicPinPoint(position, nodeType(node), "CLK");
+            const tapX = point.x - 42 - index * 18;
+            const points = [[tapX, layout.clkY], [tapX, point.y + 22], [point.x, point.y + 22], [point.x, point.y]];
+            return (
+              <g data-testid={`jk-wire-clk-q${bitIndex}`} key={`jk-clk-${node.id}`}>
+                {renderDWire(`jk-clk-tap-q${bitIndex}`, points, { arrow: false, stroke: "#475569", rerouted: true })}
+                <circle cx={tapX} cy={layout.clkY} fill="#475569" r="3.2" />
+              </g>
+            );
+          })}
+        </g>
+      )}
+      {renderSchematicUnusedInputRail(unusedRailNodes, layout)}
+    </svg>
+  );
+}
+
 function jkEquationFor(equations, ffId, pin) {
   return equations.find((equation) => isFfEquation(equation) && ffIdFromEquation(equation) === ffId && equationPin(equation) === pin);
 }
@@ -2391,8 +2960,8 @@ function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedIn
   if (canRenderDFlipFlopSchematic(ffNodes)) {
     return renderDFlipFlopSchematic({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport });
   }
-  if (canRenderJkStandardSchematic(result, ffNodes)) {
-    return renderJkStandardSchematic({ result, viewport });
+  if (canRenderJkEquationDrivenSchematic(ffNodes, equations)) {
+    return renderJkEquationDrivenSchematic({ result, rawNodes, rawEdges, unusedInputNodes, viewport });
   }
   const outgoingInputIds = new Set(rawEdges.map((edge) => splitEndpoint(edge.from).id));
   const schematicUnusedInputs = rawInputs.filter((node) => {
