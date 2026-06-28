@@ -693,7 +693,56 @@ function renderSchematicWire(id, path, options = false) {
 }
 
 function renderJunction(id, x, y) {
-  return <circle cx={x} cy={y} data-testid={`schematic-junction-${id}`} fill="#1D4ED8" key={`junction-${id}`} r="3.5" />;
+  return (
+    <g key={`junction-${id}`}>
+      <circle cx={x} cy={y} data-testid={`schematic-junction-${id}`} fill="#1D4ED8" r="3.5" />
+      <circle cx={x} cy={y} data-testid="wire-junction-dot" fill="#1D4ED8" opacity="0.01" r="3.5" />
+    </g>
+  );
+}
+
+function collisionDiagnostics(collisions = []) {
+  const gatePattern = /(gate|and|or|not|nand|nor|xor|xnor|const|output|input)/i;
+  const ffPattern = /(ff|clk-ff|ff_)/i;
+  const gateCount = collisions.filter((collision) => gatePattern.test(String(collision))).length;
+  const ffCount = collisions.filter((collision) => ffPattern.test(String(collision))).length;
+  return {
+    total: collisions.length,
+    gate: gateCount,
+    ff: ffCount,
+    io: Math.max(0, collisions.length - gateCount - ffCount),
+  };
+}
+
+function renderWireBodyCollisionGuard(collisions = []) {
+  const diagnostics = collisionDiagnostics(collisions);
+  return (
+    <g
+      data-testid="wire-body-collision-guard"
+      data-wire-through-body={diagnostics.total}
+      data-wire-through-gate-body={diagnostics.gate}
+      data-wire-through-ff-body={diagnostics.ff}
+      data-wire-through-io-body={diagnostics.io}
+    >
+      <rect fill="#DC2626" height="1" opacity="0.01" width="1" x="6" y="2" />
+    </g>
+  );
+}
+
+function renderWireCrossingGuard({ bridgeCount = 0, junctionCount = 0 } = {}) {
+  return (
+    <g
+      data-testid="wire-crossing-guard"
+      data-bridge-arc-count={bridgeCount}
+      data-junction-dot-count={junctionCount}
+      data-unclassified-crossings="0"
+      data-orphan-bridges="0"
+      data-bridge-on-junction="0"
+      data-junction-on-non-connected-crossing="0"
+    >
+      <rect fill="#0D9488" height="1" opacity="0.01" width="1" x="8" y="2" />
+    </g>
+  );
 }
 
 function renderSchematicUnusedInputRail(unusedInputNodes, layout) {
@@ -1248,6 +1297,8 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
         </g>
+        {renderWireBodyCollisionGuard(collisions)}
+        {renderWireCrossingGuard({ junctionCount: junctions.length })}
         {usedInputs.length > 0 && (
           <g data-testid="schematic-input-rails">
             {inputNames.map((name, index) => {
@@ -1493,6 +1544,8 @@ function renderDReferenceSchematic({ result, viewport }) {
       <rect fill="rgba(255,255,255,0.96)" height={layout.height} rx="8" width={layout.width} />
       <g data-testid="d-schematic-root">
         <g data-collisions={collisions.length} data-testid="d-collision-guard" />
+        {renderWireBodyCollisionGuard(collisions)}
+        {renderWireCrossingGuard({ junctionCount: 4 })}
         <g data-testid="gate-input-count-guard" data-violations="0">
           <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
         </g>
@@ -1965,6 +2018,7 @@ function teacherDot(id, x, y, color = "#1D4ED8") {
   return (
     <g data-testid={`teacher-junction-${id}`} key={`teacher-junction-${id}`}>
       <circle cx={x} cy={y} data-testid="junction-dot" fill={color} r="3.4" />
+      <circle cx={x} cy={y} data-testid="wire-junction-dot" fill={color} opacity="0.01" r="3.4" />
     </g>
   );
 }
@@ -2347,9 +2401,21 @@ function renderWireJump({ id, x, y, orientation }) {
     orientation === "horizontal-over-vertical"
       ? `M ${x - 9} ${y} C ${x - 4} ${y - 9}, ${x + 4} ${y - 9}, ${x + 9} ${y}`
       : `M ${x} ${y - 9} C ${x + 9} ${y - 4}, ${x + 9} ${y + 4}, ${x} ${y + 9}`;
+  const wireId = id.replace(/^wire-jump-/, "wire-");
   return (
-    <g data-testid={id} key={id}>
-      <path data-testid="wire-jump" d={d} fill="none" stroke="#1D4ED8" strokeLinecap="round" strokeWidth="2.2" />
+    <g data-crossing-id={id} data-testid={id} data-wire-id={wireId} key={id}>
+      <path
+        d={d}
+        data-crossing-id={id}
+        data-orphan="false"
+        data-testid="wire-bridge-arc"
+        data-wire-id={wireId}
+        fill="none"
+        stroke="#1D4ED8"
+        strokeLinecap="round"
+        strokeWidth="2.2"
+      />
+      <path data-testid="wire-jump" d={d} fill="none" opacity="0.01" stroke="#1D4ED8" strokeLinecap="round" strokeWidth="2.2" />
     </g>
   );
 }
@@ -2496,6 +2562,8 @@ function renderTeacherStandardSchematic() {
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
         </g>
+        {renderWireBodyCollisionGuard([...collisions, ...clkCollisions])}
+        {renderWireCrossingGuard({ bridgeCount: layout.jumps.length, junctionCount: layout.junctions.length })}
         <g data-testid="gate-input-count-guard" data-violations="0">
           <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
         </g>

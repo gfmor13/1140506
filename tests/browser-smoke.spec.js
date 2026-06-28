@@ -319,6 +319,23 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("ff-output-bus")).toHaveCount(0);
   await expect(page.getByTestId("merged-feedback-bus")).toHaveCount(0);
   await expect(page.getByTestId("gate-input-count-guard")).toHaveAttribute("data-violations", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-body", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-gate-body", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-ff-body", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-unclassified-crossings", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-orphan-bridges", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-bridge-on-junction", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-junction-on-non-connected-crossing", "0");
+  await expect(page.locator('[data-testid="wire-bridge-arc"]')).not.toHaveCount(0);
+  await expect(page.locator('[data-testid="wire-junction-dot"]')).not.toHaveCount(0);
+  const teacherBridgeMetadataOk = await page.evaluate(() =>
+    Array.from(document.querySelectorAll('[data-testid="wire-bridge-arc"]')).every((element) =>
+      element.hasAttribute("data-wire-id") &&
+      element.hasAttribute("data-crossing-id") &&
+      element.getAttribute("data-orphan") !== "true",
+    ),
+  );
+  expect(teacherBridgeMetadataOk).toBe(true);
   const teacherGateInputCountsOk = await page.evaluate(() =>
     Array.from(document.querySelectorAll("[data-gate-input-count]")).every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2),
   );
@@ -623,6 +640,11 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("gate-input-count-guard")).toBeVisible();
   await expect(page.getByTestId("binary-gate-decomposition")).toBeVisible();
   await expect(page.getByTestId("gate-input-count-guard")).toHaveAttribute("data-violations", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-body", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-gate-body", "0");
+  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-ff-body", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-unclassified-crossings", "0");
+  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-orphan-bridges", "0");
   await expect(page.getByTestId("d-and-d0-stage-1")).toBeVisible();
   await expect(page.getByTestId("d-and-d0-stage-2")).toBeVisible();
   await expect(page.getByTestId("d-and-d0-to-d0-pin")).toBeVisible();
@@ -799,9 +821,21 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("used layout mode: auto-layout");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("respectRawCoordinates: false");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("collision count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("wire-through-body count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("unclassified crossing count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("bridge arc count");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("junction dot count");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("orphan bridge count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("gate input count violations: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("merged FF output bus violations: 0");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show node bounding boxes");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show pin anchors");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show routing lanes");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show blocked boxes");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show wire crossings");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show bridge arcs");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show junction dots");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show collision warnings");
 
   await page.getByTestId("mode-import-json").click();
   await page.getByLabel("import-json").fill(constantOutputFixture);

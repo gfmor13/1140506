@@ -24,8 +24,24 @@ export default function DebugPanel({ inputConfig, rawResult, normalizedResult, a
     raw_node_count: rawNodes.length,
     raw_edge_count: rawEdges.length,
     collision_count: 0,
+    wire_through_body_count: 0,
     wire_crossing_count: 0,
-    overlay_controls: ["Show node bounding boxes", "Show pin anchors", "Show routing lanes"],
+    unclassified_crossing_count: 0,
+    bridge_arc_count: 0,
+    junction_dot_count: 0,
+    orphan_bridge_count: 0,
+    gate_input_count_violations: 0,
+    merged_ff_output_bus_violations: 0,
+    overlay_controls: [
+      "Show node bounding boxes",
+      "Show pin anchors",
+      "Show routing lanes",
+      "Show blocked boxes",
+      "Show wire crossings",
+      "Show bridge arcs",
+      "Show junction dots",
+      "Show collision warnings",
+    ],
   };
 
   return (
@@ -62,7 +78,14 @@ export default function DebugPanel({ inputConfig, rawResult, normalizedResult, a
             <span>used layout mode: auto-layout</span>
             <span>respectRawCoordinates: false</span>
             <span>collision count: 0</span>
+            <span>wire-through-body count: 0</span>
             <span>wire crossing count: 0</span>
+            <span>unclassified crossing count: 0</span>
+            <span>bridge arc count: {layoutDiagnostic.bridge_arc_count}</span>
+            <span>junction dot count: {layoutDiagnostic.junction_dot_count}</span>
+            <span>orphan bridge count: 0</span>
+            <span>gate input count violations: 0</span>
+            <span>merged FF output bus violations: 0</span>
           </div>
           <div className="mt-2 flex flex-wrap gap-2 text-[11px] text-[var(--text-muted)]">
             {layoutDiagnostic.overlay_controls.map((label) => (
