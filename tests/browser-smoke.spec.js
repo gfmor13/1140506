@@ -277,6 +277,53 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("schematic-view")).toBeVisible();
   await expect(page.getByTestId("teacher-schematic-root")).toHaveCount(0);
   await expect(page.getByTestId("schematic-standard-equations-panel")).toHaveCount(0);
+  await expect(page.getByTestId("jk-rail-x")).toBeVisible();
+  await expect(page.getByTestId("jk-rail-xnot")).toBeVisible();
+  await expect(page.getByTestId("jk-not-x")).toBeVisible();
+  await expect(page.getByTestId("jk-const-1")).toBeVisible();
+  await expect(page.getByTestId("jk-and-j1-q0-xnot")).toBeVisible();
+  await expect(page.getByTestId("jk-and-j0-q1not-x")).toBeVisible();
+  await expect(page.getByTestId("jk-or-z")).toBeVisible();
+  await expect(page.getByTestId("jk-ff-q1")).toBeVisible();
+  await expect(page.getByTestId("jk-ff-q0")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-k1-direct-xnot")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-k0-const1")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-j1-term")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-j0-term")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-z-q1")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-z-q0xnot")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-clk-bus")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-clk-q1")).toBeVisible();
+  await expect(page.getByTestId("jk-wire-clk-q0")).toBeVisible();
+  await expect(page.getByTestId("jk-or-j1")).toHaveCount(0);
+  await expect(page.getByTestId("jk-wire-j1-or-output")).toHaveCount(0);
+  await expect(page.getByTestId("jk-wire-k1-shared-j1")).toHaveCount(0);
+  const jkStandardSchematicOk = await page.evaluate(() => {
+    const svg = document.querySelector('[data-testid="schematic-view"]');
+    const bbox = (id) => {
+      const element = document.querySelector(`[data-testid="${id}"]`);
+      return element instanceof SVGGraphicsElement ? element.getBBox() : null;
+    };
+    const intersects = (a, b) =>
+      Boolean(a && b && a.x < b.x + b.width && a.x + a.width > b.x && a.y < b.y + b.height && a.y + a.height > b.y);
+    const ids = [
+      "jk-and-j1-q0-xnot",
+      "jk-and-j0-q1not-x",
+      "jk-or-z",
+      "jk-not-x",
+      "jk-ff-q1",
+      "jk-ff-q0",
+    ];
+    const boxes = ids.map(bbox);
+    const noOverlap = boxes.every((box, index) => boxes.every((other, otherIndex) => index === otherIndex || !intersects(box, other)));
+    const noOverflow = Boolean(svg?.parentElement && svg.parentElement.scrollWidth <= svg.parentElement.clientWidth + 1);
+    const gateCounts =
+      document.querySelectorAll('[data-testid^="jk-and-"]').length === 2 &&
+      document.querySelectorAll('[data-testid="jk-or-z"]').length === 1 &&
+      document.querySelectorAll('[data-testid="jk-not-x"]').length === 1;
+    return noOverlap && noOverflow && gateCounts;
+  });
+  expect(jkStandardSchematicOk).toBe(true);
   await expect(page.getByTestId("teacher-d-renderer")).toHaveCount(0);
   await expect(page.getByTestId("legacy-d-renderer")).toHaveCount(0);
   await expect(page.getByTestId("fallback-d-renderer")).toHaveCount(0);

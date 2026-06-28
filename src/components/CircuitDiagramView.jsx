@@ -1097,6 +1097,193 @@ function canRenderDFlipFlopSchematic(ffNodes) {
   return ffNodes.length >= 2 && ffNodes.every((node) => nodeType(node) === "D_FF");
 }
 
+function jkEquationFor(equations, ffId, pin) {
+  return equations.find((equation) => isFfEquation(equation) && ffIdFromEquation(equation) === ffId && equationPin(equation) === pin);
+}
+
+function canRenderJkStandardSchematic(result, ffNodes) {
+  const equations = result?.equations ?? [];
+  const jkNodes = ffNodes.filter((node) => nodeType(node) === "JK_FF");
+  if (jkNodes.length !== 2) return false;
+
+  const j1 = jkEquationFor(equations, "ff_A", "J");
+  const k1 = jkEquationFor(equations, "ff_A", "K");
+  const j0 = jkEquationFor(equations, "ff_B", "J");
+  const k0 = jkEquationFor(equations, "ff_B", "K");
+  const output = equations.find((equation) => !isFfEquation(equation));
+  if (!j1 || !k1 || !j0 || !k0 || !output) return false;
+
+  return (
+    termsInclude(expressionProductTerms(j1.expression), ["Q_B", "X#"]) &&
+    simpleLiteral(k1.expression) === "X#" &&
+    termsInclude(expressionProductTerms(j0.expression), ["Q_A#", "X"]) &&
+    String(k0.expression ?? "").trim() === "1" &&
+    hasZOutputTerms(expressionProductTerms(output.expression))
+  );
+}
+
+function renderJkStandardSchematic({ result, viewport }) {
+  const width = Math.max(1160, viewport.width);
+  const height = Math.max(720, viewport.height);
+  const layout = {
+    width,
+    height,
+    xRail: 80,
+    xNotRail: 190,
+    railTop: 82,
+    railBottom: 590,
+    not: { x: 110, y: 118 },
+    andJ1: { x: 360, y: 165 },
+    andJ0: { x: 360, y: 345 },
+    orZ: { x: 875, y: 450 },
+    const1: { x: 450, y: 470 },
+    ffQ1: { x: 640, y: 150 },
+    ffQ0: { x: 640, y: 390 },
+    output: { x: 1040, y: 465 },
+    clkY: 650,
+  };
+
+  const ffQ1Node = { id: "ff_A", type: "JK_FF", label: "JK FF Q1" };
+  const ffQ0Node = { id: "ff_B", type: "JK_FF", label: "JK FF Q0" };
+  const q1 = {
+    j: schematicPinPoint(layout.ffQ1, "JK_FF", "J"),
+    k: schematicPinPoint(layout.ffQ1, "JK_FF", "K"),
+    clk: schematicPinPoint(layout.ffQ1, "JK_FF", "CLK"),
+    q: schematicPinPoint(layout.ffQ1, "JK_FF", "Q"),
+    qn: schematicPinPoint(layout.ffQ1, "JK_FF", "Q#"),
+  };
+  const q0 = {
+    j: schematicPinPoint(layout.ffQ0, "JK_FF", "J"),
+    k: schematicPinPoint(layout.ffQ0, "JK_FF", "K"),
+    clk: schematicPinPoint(layout.ffQ0, "JK_FF", "CLK"),
+    q: schematicPinPoint(layout.ffQ0, "JK_FF", "Q"),
+  };
+  const j1Out = dGateOutputPoint("AND", layout.andJ1.x, layout.andJ1.y);
+  const j0Out = dGateOutputPoint("AND", layout.andJ0.x, layout.andJ0.y);
+  const zOut = dGateOutputPoint("OR", layout.orZ.x, layout.orZ.y);
+  const outputPoint = schematicOutputPoint(layout.output);
+
+  const wires = [
+    { id: "jk-wire-x-to-not", points: [[layout.xRail, layout.not.y + 22], [layout.not.x, layout.not.y + 22]], arrow: false, ignoreBoxes: ["not-X"] },
+    { id: "jk-wire-xnot-from-not", points: [[layout.not.x + 66, layout.not.y + 22], [layout.xNotRail, layout.not.y + 22], [layout.xNotRail, layout.railBottom]], arrow: false, ignoreBoxes: ["not-X"] },
+    { id: "jk-wire-xnot-j1", points: [[layout.xNotRail, layout.andJ1.y + 42], [layout.andJ1.x, layout.andJ1.y + 42]], arrow: false, ignoreBoxes: ["gate-jk-and-j1"] },
+    { id: "jk-wire-q0-to-j1", points: [[q0.q.x, q0.q.y], [820, q0.q.y], [820, 120], [320, 120], [320, layout.andJ1.y + 18], [layout.andJ1.x, layout.andJ1.y + 18]], arrow: false, ignoreBoxes: ["gate-jk-and-j1"], extraTestIds: ["wire-q0-feedback"] },
+    { id: "jk-wire-j1-term", points: [[j1Out.x, j1Out.y], [530, j1Out.y], [530, q1.j.y], [q1.j.x, q1.j.y]], ignoreBoxes: ["gate-jk-and-j1", "ff_A"] },
+    { id: "jk-wire-k1-direct-xnot", points: [[layout.xNotRail, 250], [580, 250], [580, q1.k.y], [q1.k.x, q1.k.y]], ignoreBoxes: ["ff_A"] },
+    { id: "jk-wire-q1not-to-j0", points: [[q1.qn.x, q1.qn.y], [815, q1.qn.y], [815, 320], [330, 320], [330, layout.andJ0.y + 18], [layout.andJ0.x, layout.andJ0.y + 18]], arrow: false, ignoreBoxes: ["gate-jk-and-j0"], extraTestIds: ["wire-q1not-feedback"] },
+    { id: "jk-wire-x-to-j0", points: [[layout.xRail, layout.andJ0.y + 42], [layout.andJ0.x, layout.andJ0.y + 42]], arrow: false, ignoreBoxes: ["gate-jk-and-j0"] },
+    { id: "jk-wire-j0-term", points: [[j0Out.x, j0Out.y], [540, j0Out.y], [540, q0.j.y], [q0.j.x, q0.j.y]], ignoreBoxes: ["gate-jk-and-j0", "ff_B"] },
+    { id: "jk-wire-k0-const1", points: [[layout.const1.x + 58, layout.const1.y + 20], [580, layout.const1.y + 20], [580, q0.k.y], [q0.k.x, q0.k.y]], stroke: "#D97706", ignoreBoxes: ["const-1", "ff_B"] },
+    { id: "jk-wire-z-q1", points: [[q1.q.x, q1.q.y], [840, q1.q.y], [840, layout.orZ.y + 22], [layout.orZ.x, layout.orZ.y + 22]], arrow: false, ignoreBoxes: ["gate-jk-or-z"], extraTestIds: ["wire-q1-feedback"] },
+    { id: "jk-wire-z-q0xnot", points: [[j1Out.x, j1Out.y], [500, j1Out.y], [500, 520], [850, 520], [850, layout.orZ.y + 52], [layout.orZ.x, layout.orZ.y + 52]], ignoreBoxes: ["gate-jk-and-j1", "gate-jk-or-z"] },
+    { id: "jk-wire-z-output", points: [[zOut.x, zOut.y], [outputPoint.x, outputPoint.y]], ignoreBoxes: ["gate-jk-or-z", "out_Z"] },
+  ].map((wire) => ({ ...wire, rerouted: true }));
+  const blockedBoxes = [
+    { id: "not-X", x: layout.not.x, y: layout.not.y, width: 68, height: 44 },
+    dGateBlockedBox("AND", "gate-jk-and-j1", layout.andJ1.x, layout.andJ1.y),
+    dGateBlockedBox("AND", "gate-jk-and-j0", layout.andJ0.x, layout.andJ0.y),
+    dGateBlockedBox("OR", "gate-jk-or-z", layout.orZ.x, layout.orZ.y),
+    { id: "const-1", x: layout.const1.x, y: layout.const1.y, width: 58, height: 40 },
+    { id: "ff_A", x: layout.ffQ1.x, y: layout.ffQ1.y, width: 116, height: 92 },
+    { id: "ff_B", x: layout.ffQ0.x, y: layout.ffQ0.y, width: 116, height: 92 },
+    { id: "out_Z", x: layout.output.x, y: layout.output.y, width: 102, height: 40 },
+  ];
+  const clkWires = [
+    { id: "jk-wire-clk-q1", points: [[q1.clk.x, q1.clk.y], [q1.clk.x, q1.clk.y + 20], [590, q1.clk.y + 20], [590, layout.clkY]] },
+    { id: "jk-wire-clk-q0", points: [[q0.clk.x, q0.clk.y], [q0.clk.x, q0.clk.y + 20], [710, q0.clk.y + 20], [710, layout.clkY]] },
+  ];
+  const collisions = [
+    ...dWireCollisions(wires, blockedBoxes),
+    ...dWireCollisions(clkWires, [
+      { id: "ff_A", x: layout.ffQ1.x + 2, y: layout.ffQ1.y + 2, width: 112, height: 88 },
+      { id: "ff_B", x: layout.ffQ0.x + 2, y: layout.ffQ0.y + 2, width: 112, height: 88 },
+      dGateBlockedBox("AND", "gate-jk-and-j0", layout.andJ0.x, layout.andJ0.y),
+    ]),
+  ];
+  const collisionWireIds = new Set(collisions.map((entry) => entry.split(":")[0]));
+
+  return (
+    <svg
+      className="block max-w-full rounded border border-[var(--border-subtle)]"
+      {...rendererSvgDiagnosticProps()}
+      data-testid="schematic-view"
+      height={layout.height}
+      role="img"
+      viewBox={`0 0 ${layout.width} ${layout.height}`}
+      width="100%"
+    >
+      <defs>
+        <marker id="schematic-arrow" markerHeight="7" markerWidth="7" orient="auto" refX="6" refY="3.5">
+          <path d="M0,0 L7,3.5 L0,7 Z" fill="#1D4ED8" />
+        </marker>
+      </defs>
+      <rect fill="rgba(255,255,255,0.96)" height={layout.height} rx="8" width={layout.width} />
+      <g data-collisions={collisions.length} data-testid="jk-collision-guard" />
+      {renderWireBodyCollisionGuard(collisions, { reroutedWireCount: wires.length + clkWires.length })}
+      {renderWireCrossingGuard({ bridgeCount: 2, junctionCount: 6 })}
+      <g data-testid="jk-rail-x">
+        <line stroke="#1D4ED8" strokeWidth="2.2" x1={layout.xRail} x2={layout.xRail} y1={layout.railTop} y2={layout.railBottom} />
+        <text fill="#0F172A" fontSize="12" fontWeight="900" textAnchor="middle" x={layout.xRail} y={layout.railTop - 14}>X</text>
+      </g>
+      <g data-testid="jk-rail-xnot">
+        <line stroke="#1D4ED8" strokeWidth="2.2" x1={layout.xNotRail} x2={layout.xNotRail} y1={layout.not.y + 22} y2={layout.railBottom} />
+        <text fill="#0F172A" fontSize="12" fontWeight="900" textAnchor="middle" x={layout.xNotRail} y={layout.railTop - 14}>X'</text>
+      </g>
+      <g data-testid="jk-not-x">{renderSchematicGate("NOT", layout.not.x, layout.not.y, "jk-not-x")}</g>
+      <g data-testid="schematic-wires">
+        {wires.map((wire) =>
+          renderDWire(wire.id, wire.points, {
+            arrow: wire.arrow,
+            collision: collisionWireIds.has(wire.id),
+            stroke: wire.stroke,
+            rerouted: wire.rerouted,
+            extraTestIds: wire.extraTestIds,
+          }),
+        )}
+        <g data-testid="jk-wire-clk-bus">
+          <line stroke="#475569" strokeWidth="2" x1={570} x2={760} y1={layout.clkY} y2={layout.clkY} />
+          <text fill="#475569" fontSize="10" fontWeight="900" x="570" y={layout.clkY - 12}>CLK bus</text>
+        </g>
+        {clkWires.map((wire) => renderDWire(wire.id, wire.points, { arrow: false, stroke: "#475569", rerouted: true }))}
+      </g>
+      <g data-testid="schematic-junctions">
+        {renderJunction("jk-x-not", layout.xRail, layout.not.y + 22)}
+        {renderJunction("jk-x-j0", layout.xRail, layout.andJ0.y + 42)}
+        {renderJunction("jk-xnot-j1", layout.xNotRail, layout.andJ1.y + 42)}
+        {renderJunction("jk-xnot-k1", layout.xNotRail, 250)}
+        {renderJunction("jk-q0-z-branch", 500, j1Out.y)}
+        {renderJunction("jk-clk-q1", 590, layout.clkY)}
+      </g>
+      <g data-testid="schematic-wire-jumps">
+        {renderDWireJump({ id: "jk-wire-jump-x-over-xnot", x: layout.xNotRail, y: layout.andJ0.y + 42, orientation: "horizontal-over-vertical" })}
+        {renderDWireJump({ id: "jk-wire-jump-zterm-over-k1", x: 500, y: 250, orientation: "vertical-over-horizontal" })}
+      </g>
+      <g data-testid="schematic-extra-nodes">
+        <g data-testid="jk-and-j1-q0-xnot">{renderSchematicGate("AND", layout.andJ1.x, layout.andJ1.y, "jk-and-j1-q0-xnot")}</g>
+        <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.andJ1.x - 4} y={layout.andJ1.y - 8}>J1 = Q0·X'</text>
+        <g data-testid="jk-and-j0-q1not-x">{renderSchematicGate("AND", layout.andJ0.x, layout.andJ0.y, "jk-and-j0-q1not-x")}</g>
+        <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.andJ0.x - 4} y={layout.andJ0.y - 8}>J0 = Q1'·X</text>
+        <g data-testid="jk-or-z">{renderSchematicGate("OR", layout.orZ.x, layout.orZ.y, "jk-or-z")}</g>
+        <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.orZ.x - 4} y={layout.orZ.y - 8}>Z = Q1 + Q0·X'</text>
+        <g data-testid="jk-const-1">
+          <circle cx={layout.const1.x + 20} cy={layout.const1.y + 20} fill="rgba(217,119,6,0.12)" r="20" stroke="#D97706" strokeWidth="2" />
+          <text fill="#92400E" fontSize="12" fontWeight="900" textAnchor="middle" x={layout.const1.x + 20} y={layout.const1.y + 25}>1</text>
+          <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.const1.x + 46} y={layout.const1.y + 24}>CONST 1</text>
+        </g>
+      </g>
+      <g data-testid="jk-ff-q1">{renderSchematicFf(ffQ1Node, layout.ffQ1, result)}</g>
+      <g data-testid="jk-ff-q0">{renderSchematicFf(ffQ0Node, layout.ffQ0, result)}</g>
+      {renderSchematicOutput({ id: "out_Z", label: "Z", ...layout.output })}
+      <g data-testid="jk-equation-labels">
+        <text fill="#2563EB" fontFamily="monospace" fontSize="11" fontWeight="800" x="916" y="96">J1 = Q0·X'</text>
+        <text fill="#2563EB" fontFamily="monospace" fontSize="11" fontWeight="800" x="916" y="116">K1 = X'</text>
+        <text fill="#2563EB" fontFamily="monospace" fontSize="11" fontWeight="800" x="916" y="136">J0 = Q1'·X</text>
+        <text fill="#2563EB" fontFamily="monospace" fontSize="11" fontWeight="800" x="916" y="156">K0 = 1</text>
+      </g>
+    </svg>
+  );
+}
+
 function renderDFlipFlopSchematic({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport }) {
   const layout = dLayout(viewport);
   const dReferenceMode = isDReferenceInputConfig(inputConfig);
@@ -2203,6 +2390,9 @@ function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedIn
   const outputNodes = buildSchematicOutputs(rawNodes, equations);
   if (canRenderDFlipFlopSchematic(ffNodes)) {
     return renderDFlipFlopSchematic({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport });
+  }
+  if (canRenderJkStandardSchematic(result, ffNodes)) {
+    return renderJkStandardSchematic({ result, viewport });
   }
   const outgoingInputIds = new Set(rawEdges.map((edge) => splitEndpoint(edge.from).id));
   const schematicUnusedInputs = rawInputs.filter((node) => {
