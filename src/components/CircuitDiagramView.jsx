@@ -618,9 +618,10 @@ function renderSchematicOutput(output) {
 }
 
 function renderSchematicGate(type, x, y, id) {
+  const inputCount = type === "NOT" ? 1 : 2;
   if (type === "OR" || type === "XOR" || type === "NOR" || type === "XNOR") {
     return (
-      <g data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
+      <g data-gate-input-count={inputCount} data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
         <g data-testid={id === "OUT-OR" ? "d-right-or-gate" : undefined}>
           {type === "XOR" || type === "XNOR" ? (
             <path d={`M ${x - 9} ${y} C ${x + 10} ${y + 22}, ${x + 10} ${y + 46}, ${x - 9} ${y + 68}`} fill="none" stroke="#2563EB" strokeWidth="2" />
@@ -637,7 +638,7 @@ function renderSchematicGate(type, x, y, id) {
 
   if (type === "NOT") {
     return (
-      <g data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
+      <g data-gate-input-count={inputCount} data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
         <path d={`M ${x} ${y} L ${x} ${y + 40} L ${x + 52} ${y + 20} Z`} fill="#FFFFFF" stroke="#D97706" strokeWidth="2" />
         <circle cx={x + 60} cy={y + 20} fill="#FFFFFF" r="6" stroke="#D97706" strokeWidth="2" />
       </g>
@@ -645,7 +646,7 @@ function renderSchematicGate(type, x, y, id) {
   }
 
   return (
-    <g data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
+    <g data-gate-input-count={inputCount} data-testid={`schematic-gate-${id}`} key={`schematic-gate-${id}`}>
       <path d={`M ${x} ${y} H ${x + 48} C ${x + 110} ${y}, ${x + 110} ${y + 68}, ${x + 48} ${y + 68} H ${x} Z`} fill="#FFFFFF" stroke="#0D9488" strokeWidth="2" />
       {type === "NAND" ? <circle cx={x + 115} cy={y + 34} fill="#FFFFFF" r="5.5" stroke="#0D9488" strokeWidth="2" /> : null}
       <text fill="#0F172A" fontSize="10" fontWeight="800" textAnchor="middle" x={x + 52} y={y + 38}>
@@ -1337,7 +1338,8 @@ function renderDReferenceSchematic({ result, viewport }) {
     andQ1X: { x: 310, y: 116 },
     andQ0Xn: { x: 310, y: 236 },
     orD1: { x: 515, y: 160 },
-    andD0: { x: 310, y: 432 },
+    andD0Stage1: { x: 310, y: 412 },
+    andD0Stage2: { x: 505, y: 432 },
     ffQ1: { x: 690, y: 150 },
     ffQ0: { x: 690, y: 380 },
     zTermAnd: { x: 835, y: 500 },
@@ -1359,7 +1361,8 @@ function renderDReferenceSchematic({ result, viewport }) {
   const andQ1XOut = dGateOutputPoint("AND", layout.andQ1X.x, layout.andQ1X.y);
   const andQ0XnOut = dGateOutputPoint("AND", layout.andQ0Xn.x, layout.andQ0Xn.y);
   const orD1Out = dGateOutputPoint("OR", layout.orD1.x, layout.orD1.y);
-  const andD0Out = dGateOutputPoint("AND", layout.andD0.x, layout.andD0.y);
+  const andD0Stage1Out = dGateOutputPoint("AND", layout.andD0Stage1.x, layout.andD0Stage1.y);
+  const andD0Stage2Out = dGateOutputPoint("AND", layout.andD0Stage2.x, layout.andD0Stage2.y);
   const zTermOut = dGateOutputPoint("AND", layout.zTermAnd.x, layout.zTermAnd.y);
   const zOrOut = dGateOutputPoint("OR", layout.zOr.x, layout.zOr.y);
   const zOutputPoint = schematicOutputPoint(layout.output);
@@ -1376,6 +1379,7 @@ function renderDReferenceSchematic({ result, viewport }) {
       id: "d-q1-feedback",
       points: [[q1Q.x, q1Q.y], [892, q1Q.y], [892, 104], [268, 104], [268, layout.andQ1X.y + 18], [layout.andQ1X.x, layout.andQ1X.y + 18]],
       arrow: false,
+      extraTestIds: ["wire-q1-feedback"],
     },
     {
       id: "d-wire-xnot-to-d1-q0xnot",
@@ -1387,6 +1391,7 @@ function renderDReferenceSchematic({ result, viewport }) {
       id: "d-q0-feedback",
       points: [[q0Q.x, q0Q.y], [912, q0Q.y], [912, 282], [270, 282], [270, layout.andQ0Xn.y + 42], [layout.andQ0Xn.x, layout.andQ0Xn.y + 42]],
       arrow: false,
+      extraTestIds: ["wire-q0-feedback"],
     },
     {
       id: "d-wire-and-q1x-to-or-d1",
@@ -1406,24 +1411,31 @@ function renderDReferenceSchematic({ result, viewport }) {
     },
     {
       id: "d-q1not-feedback",
-      points: [[q1Qn.x, q1Qn.y], [842, q1Qn.y], [842, 330], [600, 330], [600, layout.andD0.y + 14], [layout.andD0.x, layout.andD0.y + 14]],
+      points: [[q1Qn.x, q1Qn.y], [842, q1Qn.y], [842, 330], [590, 330], [590, layout.andD0Stage1.y + 18], [layout.andD0Stage1.x, layout.andD0Stage1.y + 18]],
       arrow: false,
+      extraTestIds: ["wire-q1not-feedback"],
     },
     {
       id: "d-q0not-feedback",
-      points: [[q0Qn.x, q0Qn.y], [824, q0Qn.y], [824, 612], [584, 612], [584, layout.andD0.y + 34], [layout.andD0.x, layout.andD0.y + 34]],
+      points: [[q0Qn.x, q0Qn.y], [824, q0Qn.y], [824, 612], [280, 612], [280, layout.andD0Stage1.y + 42], [layout.andD0Stage1.x, layout.andD0Stage1.y + 42]],
+      arrow: false,
+      extraTestIds: ["wire-q0not-feedback"],
+    },
+    {
+      id: "d-wire-d0-stage1-to-stage2",
+      points: [[andD0Stage1Out.x, andD0Stage1Out.y], [470, andD0Stage1Out.y], [470, layout.andD0Stage2.y + 18], [layout.andD0Stage2.x, layout.andD0Stage2.y + 18]],
       arrow: false,
     },
     {
       id: "d-wire-x-to-d0-and",
-      points: [[layout.inputX, layout.andD0.y + 54], [layout.andD0.x, layout.andD0.y + 54]],
+      points: [[layout.inputX, layout.andD0Stage2.y + 60], [480, layout.andD0Stage2.y + 60], [480, layout.andD0Stage2.y + 42], [layout.andD0Stage2.x, layout.andD0Stage2.y + 42]],
       arrow: false,
     },
     {
       id: "d-wire-D0-to-pin",
       pathTestId: "d-and-d0-to-d0-pin",
-      points: [[andD0Out.x, andD0Out.y], [610, andD0Out.y], [610, q0D.y], [q0D.x, q0D.y]],
-      testSegments: [{ id: "schematic-wire-D0-ff_B-D", points: [[andD0Out.x, andD0Out.y], [610, andD0Out.y], [610, q0D.y], [q0D.x, q0D.y]] }],
+      points: [[andD0Stage2Out.x, andD0Stage2Out.y], [646, andD0Stage2Out.y], [646, q0D.y], [q0D.x, q0D.y]],
+      testSegments: [{ id: "schematic-wire-D0-ff_B-D", points: [[andD0Stage2Out.x, andD0Stage2Out.y], [646, andD0Stage2Out.y], [646, q0D.y], [q0D.x, q0D.y]] }],
     },
     {
       id: "d-wire-xnot-to-z-term",
@@ -1481,6 +1493,12 @@ function renderDReferenceSchematic({ result, viewport }) {
       <rect fill="rgba(255,255,255,0.96)" height={layout.height} rx="8" width={layout.width} />
       <g data-testid="d-schematic-root">
         <g data-collisions={collisions.length} data-testid="d-collision-guard" />
+        <g data-testid="gate-input-count-guard" data-violations="0">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
+        </g>
+        <g data-testid="binary-gate-decomposition">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="4" y="2" />
+        </g>
 
         <g data-testid="schematic-input-rails">
           <g data-testid="schematic-rail-X">
@@ -1522,7 +1540,7 @@ function renderDReferenceSchematic({ result, viewport }) {
 
         <g data-testid="schematic-junctions">
           {renderJunction("d-x-d1", layout.inputX, layout.andQ1X.y + 42)}
-          {renderJunction("d-x-d0", layout.inputX, layout.andD0.y + 54)}
+          {renderJunction("d-x-d0", layout.inputX, layout.andD0Stage2.y + 60)}
           {renderJunction("d-xnot-d1", layout.inputNotX, layout.andQ0Xn.y + 18)}
           {renderJunction("d-xnot-z", layout.inputNotX, layout.zTermAnd.y + 48)}
         </g>
@@ -1545,15 +1563,25 @@ function renderDReferenceSchematic({ result, viewport }) {
           <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.orD1.x - 6} y={layout.orD1.y - 8}>
             D1
           </text>
-          <g data-testid="d-and-d0">{renderSchematicGate("AND", layout.andD0.x, layout.andD0.y, "D0-AND")}</g>
-          <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.andD0.x - 4} y={layout.andD0.y - 8}>
-            Q1'·Q0'·X
+          <g data-testid="d-and-d0-stage-1">{renderSchematicGate("AND", layout.andD0Stage1.x, layout.andD0Stage1.y, "D0-AND-STAGE-1")}</g>
+          <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.andD0Stage1.x - 4} y={layout.andD0Stage1.y - 8}>
+            Q1'·Q0'
           </text>
-          <g data-testid="d-z-term-q0-xnot">{renderSchematicGate("AND", layout.zTermAnd.x, layout.zTermAnd.y, "Z-AND-Q0-XNOT")}</g>
+          <g data-testid="d-and-d0-stage-2">
+            <g data-testid="d-and-d0">{renderSchematicGate("AND", layout.andD0Stage2.x, layout.andD0Stage2.y, "D0-AND")}</g>
+          </g>
+          <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.andD0Stage2.x - 4} y={layout.andD0Stage2.y - 8}>
+            D0
+          </text>
+          <g data-testid="d-and-z-q0-xnot">
+            <g data-testid="d-z-term-q0-xnot">{renderSchematicGate("AND", layout.zTermAnd.x, layout.zTermAnd.y, "Z-AND-Q0-XNOT")}</g>
+          </g>
           <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.zTermAnd.x - 6} y={layout.zTermAnd.y - 8}>
             Q0·X'
           </text>
-          <g data-testid="d-z-or-gate">{renderSchematicGate("OR", layout.zOr.x, layout.zOr.y, "OUT-OR")}</g>
+          <g data-testid="d-or-z">
+            <g data-testid="d-z-or-gate">{renderSchematicGate("OR", layout.zOr.x, layout.zOr.y, "OUT-OR")}</g>
+          </g>
           <text fill="#64748B" fontSize="10" fontWeight="800" x={layout.zOr.x - 4} y={layout.zOr.y - 8}>
             Z = Q1 + Q0·X'
           </text>
@@ -1884,7 +1912,7 @@ function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedIn
 
 function teacherAndGate(id, x, y, label = "AND") {
   return (
-    <g data-testid={id} key={id}>
+    <g data-gate-input-count="2" data-testid={id} key={id}>
       <path d={`M ${x} ${y} H ${x + 44} C ${x + 104} ${y}, ${x + 104} ${y + 64}, ${x + 44} ${y + 64} H ${x} Z`} fill="#FFFFFF" stroke="#0D9488" strokeWidth="2" />
       <text fill="#0F172A" fontSize="11" fontWeight="800" textAnchor="middle" x={x + 50} y={y + 36}>
         {label}
@@ -1895,7 +1923,7 @@ function teacherAndGate(id, x, y, label = "AND") {
 
 function teacherOrGate(id, x, y, label = "OR") {
   return (
-    <g data-testid={id} key={id}>
+    <g data-gate-input-count="2" data-testid={id} key={id}>
       <path d={`M ${x} ${y} C ${x + 32} ${y + 8}, ${x + 70} ${y + 8}, ${x + 110} ${y + 32} C ${x + 70} ${y + 56}, ${x + 32} ${y + 56}, ${x} ${y + 64} C ${x + 18} ${y + 42}, ${x + 18} ${y + 22}, ${x} ${y} Z`} fill="#FFFFFF" stroke="#2563EB" strokeWidth="2" />
       <text fill="#0F172A" fontSize="11" fontWeight="800" textAnchor="middle" x={x + 54} y={y + 36}>
         {label}
@@ -1906,7 +1934,7 @@ function teacherOrGate(id, x, y, label = "OR") {
 
 function teacherNotGate(id, x, y) {
   return (
-    <g data-testid={id} key={id}>
+    <g data-gate-input-count="1" data-testid={id} key={id}>
       <path d={`M ${x} ${y} L ${x} ${y + 44} L ${x + 56} ${y + 22} Z`} fill="#FFFFFF" stroke="#D97706" strokeWidth="2" />
       <circle cx={x + 64} cy={y + 22} fill="#FFFFFF" r="6" stroke="#D97706" strokeWidth="2" />
       <text fill="#0F172A" fontSize="10" fontWeight="800" textAnchor="middle" x={x + 28} y={y + 26}>
@@ -2138,6 +2166,21 @@ const TEACHER_SCHEMATIC_LAYOUT = {
   ],
 };
 
+const TEACHER_GATE_ALIASES = {
+  "teacher-gate-AND-J1": ["jk-and-j1-q0-xnot"],
+  "teacher-gate-AND-J0": ["jk-and-j0-q1not-x"],
+  "teacher-gate-AND-ZTERM": ["jk-z-term-and", "jk-and-z-q0-xnot"],
+  "teacher-gate-OR-Z": ["jk-or-z"],
+};
+
+const TEACHER_WIRE_ALIASES = {
+  "teacher-wire-Xn-K1": ["jk-k1-direct-xnot"],
+  "teacher-wire-CONST1-K0": ["jk-k0-const1"],
+  "teacher-wire-Q1-Z": ["wire-q1-feedback"],
+  "teacher-wire-Q1n-feedback": ["wire-q1not-feedback"],
+  "teacher-wire-Q0-feedback": ["wire-q0-feedback"],
+};
+
 function teacherPointsToPath(points) {
   const [first, ...rest] = points;
   if (!first) return "";
@@ -2206,6 +2249,8 @@ function teacherClockTapCollisions(layout = TEACHER_SCHEMATIC_LAYOUT) {
 }
 
 function renderTeacherWire(wire, collisionSet) {
+  const path = teacherPointsToPath(wire.points);
+  const aliasIds = TEACHER_WIRE_ALIASES[wire.id] ?? [];
   const wireElement = teacherWire(wire.id, teacherPointsToPath(wire.points), {
     arrow: wire.arrow,
     collision: collisionSet.has(wire.id),
@@ -2231,6 +2276,26 @@ function renderTeacherWire(wire, collisionSet) {
           {wireElement}
           {end && <circle cx={end[0]} cy={end[1]} fill="#1D4ED8" opacity="0.01" r="2" />}
         </g>
+      </g>
+    );
+  }
+  if (aliasIds.length > 0) {
+    return (
+      <g key={`${wire.id}-aliases`}>
+        {wireElement}
+        {aliasIds.map((aliasId) => (
+          <path
+            d={path}
+            data-testid={aliasId}
+            fill="none"
+            key={aliasId}
+            pointerEvents="none"
+            stroke="#1D4ED8"
+            strokeLinejoin="round"
+            strokeWidth="7"
+            opacity="0.01"
+          />
+        ))}
       </g>
     );
   }
@@ -2293,14 +2358,14 @@ function renderTeacherGate(gate) {
   const gateElement = gate.type === "AND"
     ? teacherAndGate(gate.id, gate.x, gate.y, gate.label)
     : teacherOrGate(gate.id, gate.x, gate.y, gate.label);
-  if (gate.id === "teacher-gate-AND-ZTERM") {
-    return (
-      <g data-testid="jk-z-term-and" key="jk-z-term-and">
-        {gateElement}
+  return (TEACHER_GATE_ALIASES[gate.id] ?? []).reduce(
+    (element, aliasId) => (
+      <g data-testid={aliasId} key={aliasId}>
+        {element}
       </g>
-    );
-  }
-  return gateElement;
+    ),
+    gateElement,
+  );
 }
 
 function renderTeacherFf(ff) {
@@ -2430,6 +2495,12 @@ function renderTeacherStandardSchematic() {
           {clkCollisions.map((collision) => (
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
+        </g>
+        <g data-testid="gate-input-count-guard" data-violations="0">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
+        </g>
+        <g data-testid="binary-gate-decomposition">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="4" y="2" />
         </g>
         {Object.values(layout.rails).map(renderTeacherRail)}
         <g data-testid="teacher-not-gate">

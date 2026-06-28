@@ -301,9 +301,28 @@ test("EDA workbench browser smoke", async ({ page }) => {
     "jk-clk-entry-q1",
     "jk-clk-entry-q0",
     "jk-z-term-and",
+    "gate-input-count-guard",
+    "binary-gate-decomposition",
+    "jk-and-j1-q0-xnot",
+    "jk-and-j0-q1not-x",
+    "jk-k1-direct-xnot",
+    "jk-k0-const1",
+    "jk-and-z-q0-xnot",
+    "jk-or-z",
+    "wire-q1-feedback",
+    "wire-q1not-feedback",
+    "wire-q0-feedback",
   ]) {
     await expect(page.getByTestId(id)).toBeVisible();
   }
+  await expect(page.getByTestId("wire-q0not-feedback")).toHaveCount(0);
+  await expect(page.getByTestId("ff-output-bus")).toHaveCount(0);
+  await expect(page.getByTestId("merged-feedback-bus")).toHaveCount(0);
+  await expect(page.getByTestId("gate-input-count-guard")).toHaveAttribute("data-violations", "0");
+  const teacherGateInputCountsOk = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("[data-gate-input-count]")).every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2),
+  );
+  expect(teacherGateInputCountsOk).toBe(true);
   await expect(page.getByTestId("teacher-x-main-bus-q1")).toHaveCount(0);
   await expect(page.getByTestId("teacher-x-main-bus-q0")).toHaveCount(0);
   await expect(page.getByTestId("teacher-x-main-arrow-q1")).toHaveCount(0);
@@ -601,8 +620,14 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("d-or-d1")).toBeVisible();
   await expect(page.getByTestId("d-or-d1-to-d1-pin")).toHaveCount(1);
   await expect(page.getByTestId("d-ff-q1-d1-pin")).toBeVisible();
-  await expect(page.getByTestId("d-and-d0")).toBeVisible();
+  await expect(page.getByTestId("gate-input-count-guard")).toBeVisible();
+  await expect(page.getByTestId("binary-gate-decomposition")).toBeVisible();
+  await expect(page.getByTestId("gate-input-count-guard")).toHaveAttribute("data-violations", "0");
+  await expect(page.getByTestId("d-and-d0-stage-1")).toBeVisible();
+  await expect(page.getByTestId("d-and-d0-stage-2")).toBeVisible();
   await expect(page.getByTestId("d-and-d0-to-d0-pin")).toBeVisible();
+  await expect(page.getByTestId("d-and-z-q0-xnot")).toBeVisible();
+  await expect(page.getByTestId("d-or-z")).toBeVisible();
   await expect(page.getByTestId("d-z-or-gate")).toBeVisible();
   await expect(page.getByTestId("d-z-or-input-q1")).toHaveCount(1);
   await expect(page.getByTestId("d-z-or-input-q0-xnot")).toHaveCount(1);
@@ -614,6 +639,12 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("d-q1not-feedback")).toBeVisible();
   await expect(page.getByTestId("d-q0-feedback")).toBeVisible();
   await expect(page.getByTestId("d-q0not-feedback")).toBeVisible();
+  await expect(page.getByTestId("wire-q1-feedback")).toBeVisible();
+  await expect(page.getByTestId("wire-q1not-feedback")).toBeVisible();
+  await expect(page.getByTestId("wire-q0-feedback")).toBeVisible();
+  await expect(page.getByTestId("wire-q0not-feedback")).toBeVisible();
+  await expect(page.getByTestId("ff-output-bus")).toHaveCount(0);
+  await expect(page.getByTestId("merged-feedback-bus")).toHaveCount(0);
   await expect(page.getByTestId("d-ff-q1")).toBeVisible();
   await expect(page.getByTestId("d-ff-q0")).toBeVisible();
   await expect(page.getByTestId("schematic-gate-D1-OR")).toBeVisible();
@@ -649,6 +680,10 @@ test("EDA workbench browser smoke", async ({ page }) => {
     return box?.width ?? 0;
   });
   expect(dOutputWireWidth).toBeGreaterThan(40);
+  const dGateInputCountsOk = await page.evaluate(() =>
+    Array.from(document.querySelectorAll("[data-gate-input-count]")).every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2),
+  );
+  expect(dGateInputCountsOk).toBe(true);
   await expect(page.locator('[data-testid="d-wire-jump"]')).toHaveCount(0);
   await expect(page.getByTestId("schematic-clk-arrow-ff_A")).toBeVisible();
   await expect(page.getByTestId("schematic-clk-arrow-ff_B")).toBeVisible();
