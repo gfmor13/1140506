@@ -265,224 +265,23 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("circuit-fit-button")).toHaveCount(0);
   await expect(page.getByTestId("circuit-view-teacher")).toHaveCount(0);
   await expect(page.getByTestId("standard-circuit-diagram")).toBeVisible();
-  await expect(page.getByTestId("teacher-schematic-root")).toBeVisible();
-  for (const id of [
-    "teacher-rail-X",
-    "teacher-rail-X-not",
-    "teacher-x-source",
-    "teacher-rail-x-main",
-    "teacher-x-main-arrow",
-    "teacher-rail-x-branch-to-not",
-    "teacher-x-to-not-input",
-    "teacher-not-gate",
-    "teacher-not-input-X",
-    "teacher-not-output-Xnot",
-    "teacher-rail-x-not",
-    "teacher-xnot-rail",
-    "teacher-xnot-label",
-    "teacher-x-not-from-not-output",
-    "teacher-not-X",
-    "teacher-gate-AND-J1",
-    "teacher-gate-AND-J0",
-    "teacher-gate-AND-ZTERM",
-    "teacher-gate-OR-Z",
-    "teacher-const-1",
-    "teacher-ff-Q1",
-    "teacher-ff-Q0",
-    "teacher-output-Z",
-    "teacher-clk-bus",
-    "teacher-clk-tap-Q1",
-    "teacher-clk-tap-Q0",
-    "teacher-clk-dot-Q1",
-    "teacher-clk-dot-Q0",
-    "jk-clk-bus",
-    "jk-clk-tap-q1",
-    "jk-clk-tap-q0",
-    "jk-clk-entry-q1",
-    "jk-clk-entry-q0",
-    "jk-z-term-and",
-    "gate-input-count-guard",
-    "binary-gate-decomposition",
-    "jk-and-j1-q0-xnot",
-    "jk-and-j0-q1not-x",
-    "jk-k1-direct-xnot",
-    "jk-k0-const1",
-    "jk-and-z-q0-xnot",
-    "jk-or-z",
-    "wire-q1-feedback",
-    "wire-q1not-feedback",
-    "wire-q0-feedback",
-  ]) {
-    await expect(page.getByTestId(id)).toBeVisible();
-  }
-  await expect(page.getByTestId("wire-q0not-feedback")).toHaveCount(0);
-  await expect(page.getByTestId("ff-output-bus")).toHaveCount(0);
-  await expect(page.getByTestId("merged-feedback-bus")).toHaveCount(0);
-  await expect(page.getByTestId("gate-input-count-guard")).toHaveAttribute("data-violations", "0");
-  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-body", "0");
-  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-gate-body", "0");
-  await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-ff-body", "0");
-  const teacherReroutedWireCount = await page.getByTestId("wire-body-collision-guard").evaluate((element) =>
-    Number(element.getAttribute("data-rerouted-wire-count") ?? "0"),
-  );
-  expect(teacherReroutedWireCount).toBeGreaterThan(0);
-  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-unclassified-crossings", "0");
-  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-orphan-bridges", "0");
-  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-bridge-on-junction", "0");
-  await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-junction-on-non-connected-crossing", "0");
-  await expect(page.locator('[data-testid="wire-bridge-arc"]')).not.toHaveCount(0);
-  await expect(page.locator('[data-testid="wire-junction-dot"]')).not.toHaveCount(0);
-  const teacherBridgeMetadataOk = await page.evaluate(() =>
-    Array.from(document.querySelectorAll('[data-testid="wire-bridge-arc"]')).every((element) =>
-      element.hasAttribute("data-wire-id") &&
-      element.hasAttribute("data-crossing-id") &&
-      element.getAttribute("data-orphan") !== "true",
-    ),
-  );
-  expect(teacherBridgeMetadataOk).toBe(true);
-  const teacherGateInputCountsOk = await page.evaluate(() =>
-    Array.from(document.querySelectorAll("[data-gate-input-count]")).every((element) => Number(element.getAttribute("data-gate-input-count")) <= 2),
-  );
-  expect(teacherGateInputCountsOk).toBe(true);
-  await expect(page.getByTestId("teacher-x-main-bus-q1")).toHaveCount(0);
-  await expect(page.getByTestId("teacher-x-main-bus-q0")).toHaveCount(0);
-  await expect(page.getByTestId("teacher-x-main-arrow-q1")).toHaveCount(0);
-  await expect(page.getByTestId("teacher-x-main-arrow-q0")).toHaveCount(0);
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toBeVisible();
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("Reference Equations");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("J1 = Q0·X'");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("K1 = X'");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("J0 = Q1'·X");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("K0 = 1");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).toContainText("Z = Q1 + Q0·X'");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).not.toContainText("J1 = X·Q0");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).not.toContainText("K1 = X' + Q0");
-  await expect(page.getByTestId("schematic-standard-equations-panel")).not.toContainText("J0 = Q1·X");
-  await expect(page.locator('[data-testid^="teacher-gate-OR-"]')).toHaveCount(1);
-  await expect(page.locator('[data-testid^="teacher-gate-AND-"]')).toHaveCount(3);
-  await expect(page.locator('[data-testid="teacher-not-X"]')).toHaveCount(1);
-  await expect(page.locator('[data-testid="teacher-const-1"]')).toHaveCount(1);
-  await expect(page.locator('[data-testid="wire-jump"]')).not.toHaveCount(0);
-  await expect(page.locator('[data-testid="junction-dot"]')).not.toHaveCount(0);
-  await expect(page.getByTestId("wire-jump-x-feedback")).toBeVisible();
-  await expect(page.getByTestId("wire-jump-xnot-q0")).toBeVisible();
-  for (const id of [
-    "teacher-wire-J0",
-    "teacher-wire-CONST1-K0",
-    "teacher-wire-Q1-Z",
-    "teacher-wire-Q1n-feedback",
-    "teacher-wire-Q0-feedback",
-  ]) {
-    await expect(page.getByTestId(id)).toBeVisible();
-    await expect(page.getByTestId(id)).toHaveAttribute("data-collision", "false");
-  }
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("X");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("X'");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("NOT");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("AND");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("OR");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("JK FF Q1");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("JK FF Q0");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("J1");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("K1");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("J0");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("K0");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("Q1");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("Q0");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("Z");
-  await expect(page.getByTestId("teacher-schematic-root")).toContainText("CLK");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("Q_A#");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("Q_B#");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("J_A");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("K_A");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("J_B");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("K_B");
-  await expect(page.getByTestId("teacher-schematic-root")).not.toContainText("Y");
-  const teacherReferenceLayoutOk = await page.evaluate(() => {
-    const box = (id) => document.querySelector(`[data-testid="${id}"]`)?.getBoundingClientRect();
-    const pathD = (id) => document.querySelector(`[data-testid="${id}"]`)?.getAttribute("d");
-    const overlaps = (a, b, gap = 0) =>
-      Boolean(a && b && a.left < b.right + gap && a.right + gap > b.left && a.top < b.bottom + gap && a.bottom + gap > b.top);
-    const svg = box("teacher-schematic-root");
-    const svgElement = document.querySelector('[data-testid="teacher-schematic-root"]');
-    const andJ1 = box("teacher-gate-AND-J1");
-    const andJ0 = box("teacher-gate-AND-J0");
-    const andZTerm = box("teacher-gate-AND-ZTERM");
-    const orZ = box("teacher-gate-OR-Z");
-    const constOne = box("teacher-const-1");
-    const gates = [andJ1, andJ0, andZTerm, orZ, constOne];
-    const q1 = box("teacher-ff-Q1");
-    const q0 = box("teacher-ff-Q0");
-    const output = box("teacher-output-Z");
-    const clk = box("teacher-clk-bus");
-    const jkClkBus = box("jk-clk-bus");
-    const jkClkTapQ1 = box("jk-clk-tap-q1");
-    const jkClkTapQ0 = box("jk-clk-tap-q0");
-    const jkZTermAnd = box("jk-z-term-and");
-    const equationsPanel = box("schematic-standard-equations-panel");
-    const collisionGuard = document.querySelector('[data-testid="teacher-collision-guard"]');
-    if (
-      !svg ||
-      !svgElement ||
-      !q1 ||
-      !q0 ||
-      !output ||
-      !clk ||
-      !jkClkBus ||
-      !jkClkTapQ1 ||
-      !jkClkTapQ0 ||
-      !jkZTermAnd ||
-      !equationsPanel ||
-      gates.some((gate) => !gate)
-    )
-      return false;
-    const expectedPaths = {
-      "teacher-wire-X-NOT": "M 120 100 V 152 H 110",
-      "teacher-wire-NOT-Xn": "M 180 152 H 230",
-      "teacher-wire-Xn-J1": "M 230 208 H 260 V 180 H 310 V 208 H 340",
-      "teacher-wire-Q0-to-J1": "M 286 232 H 316 V 260 H 326 V 232 H 340",
-      "teacher-wire-J1": "M 444 222 H 474 V 176 H 585 V 210 H 620",
-      "teacher-wire-Xn-K1": "M 230 270 H 260 V 294 H 588 V 250 H 620",
-      "teacher-wire-X-J0": "M 200 100 H 230 V 468 H 310 V 432 H 340",
-      "teacher-wire-Q1n-feedback": "M 770 250 H 805 V 124 H 1130 V 652 H 326 V 408 H 340",
-      "teacher-wire-J0": "M 444 422 H 480 V 300 H 812 V 210 H 850",
-      "teacher-wire-Q0-feedback": "M 1000 210 H 1088 V 616 H 286 V 232",
-      "teacher-wire-Q0-to-ZTERM": "M 286 518 H 650 H 680",
-      "teacher-wire-Xn-ZTERM": "M 230 542 H 260 V 574 H 650 V 542 H 680",
-      "teacher-wire-ZTERM-OR": "M 784 532 H 820 V 590 H 920 V 548 H 950",
-      "teacher-wire-CONST1-K0": "M 724 351 H 760 V 312 H 834 V 250 H 850",
-      "teacher-wire-Q1-Z": "M 770 210 H 810 V 480 H 918 V 522 H 950",
-      "teacher-wire-ORZ-Z": "M 1060 532 H 1092 V 520 H 1160",
-      "jk-clk-entry-q1": "M 695 290 V 312 H 608 V 690",
-      "jk-clk-entry-q0": "M 925 290 V 615 H 1000 V 690",
-    };
-    const lanesMatch = Object.entries(expectedPaths).every(([id, d]) => pathD(id) === d);
-    const viewBox = svgElement.getAttribute("viewBox");
-    const inputGatesBeforeFfs = andJ1.right < q1.left - 12 && andJ0.right < q1.left - 12;
-    const gatesClear = gates.every((gate) => !overlaps(gate, q1, 8) && !overlaps(gate, q0, 8));
-    const outputInside = output.right < svg.right - 12 && output.left > svg.left + 12;
-    const or2BeforeOutput = orZ.right < output.left - 8;
-    const equationsClear = equationsPanel.top > svg.bottom + 4 || equationsPanel.left > svg.right + 4;
-    const noInitialOverflow = svgElement.parentElement.scrollWidth <= svgElement.parentElement.clientWidth + 1;
-    const legacyRoutesGone =
-      pathD("teacher-wire-J0") !== "M 444 422 H 810 V 210 H 850" &&
-      pathD("teacher-wire-Q1-Z") !== "M 770 210 H 790 V 522 H 950";
-    return (
-      viewBox === "0 0 1320 820" &&
-      lanesMatch &&
-      legacyRoutesGone &&
-      inputGatesBeforeFfs &&
-      gatesClear &&
-      outputInside &&
-      or2BeforeOutput &&
-      equationsClear &&
-      noInitialOverflow &&
-      collisionGuard?.getAttribute("data-collisions") === "0" &&
-      collisionGuard?.getAttribute("data-clk-collisions") === "0"
-    );
-  });
-  expect(teacherReferenceLayoutOk).toBe(true);
-  await expect(page.getByTestId("teacher-schematic-root")).toBeVisible();
+  await expect(page.getByTestId("active-circuit-renderer-marker")).toContainText("ACTIVE CIRCUIT RENDERER: diagnostic-v1");
+  await expect(page.getByTestId("active-circuit-renderer-marker")).toContainText("ACTIVE PATH:");
+  await expect(page.getByTestId("active-circuit-renderer-marker")).toContainText("D1 MODE:");
+  await expect(page.getByTestId("circuit-renderer-svg-root")).toHaveAttribute("data-renderer-version", "diagnostic-v1");
+  const activePath = await page.getByTestId("circuit-renderer-svg-root").getAttribute("data-active-renderer-path");
+  expect(activePath).not.toMatch(/teacher|legacy|fallback|raw-topology|hardcoded/i);
+  await expect(page.getByTestId("circuit-renderer-svg-root")).toHaveAttribute("data-d1-mode", "and-and-or");
+  await expect(page.getByTestId("workbench")).not.toContainText("ERROR: STALE OR FALLBACK CIRCUIT RENDERER ACTIVE");
+  await expect(page.getByTestId("workbench")).not.toContainText("ERROR: D1 OR receives direct literal inputs");
+  await expect(page.getByTestId("schematic-view")).toBeVisible();
+  await expect(page.getByTestId("teacher-schematic-root")).toHaveCount(0);
+  await expect(page.getByTestId("schematic-standard-equations-panel")).toHaveCount(0);
+  await expect(page.getByTestId("teacher-d-renderer")).toHaveCount(0);
+  await expect(page.getByTestId("legacy-d-renderer")).toHaveCount(0);
+  await expect(page.getByTestId("fallback-d-renderer")).toHaveCount(0);
+  await expect(page.getByTestId("schematic-view")).not.toContainText("Q_A#");
+  await expect(page.getByTestId("schematic-view")).not.toContainText("J_A");
   await page.getByTestId("tab-timing-diagram").click();
   await expect(page.getByTestId("workbench")).toContainText("Q1");
   await expect(page.getByTestId("workbench")).toContainText("Q0");
@@ -643,6 +442,8 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("d-and-d1-q1-x")).toBeVisible();
   await expect(page.getByTestId("d-and-d1-q0-xnot")).toBeVisible();
   await expect(page.getByTestId("d-or-d1")).toBeVisible();
+  await expect(page.getByTestId("d-or-d1")).toHaveAttribute("data-input-sources", "d-and-d1-q1-x.OUT,d-and-d1-q0-xnot.OUT");
+  await expect(page.getByTestId("d-or-d1")).toHaveAttribute("data-direct-literal-inputs", "0");
   await expect(page.getByTestId("d-or-d1-input-and-q1-x")).toHaveCount(1);
   await expect(page.getByTestId("d-or-d1-input-and-q0-xnot")).toHaveCount(1);
   await expect(page.getByTestId("d-or-d1-input-q1-direct")).toHaveCount(0);

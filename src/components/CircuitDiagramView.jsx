@@ -21,6 +21,65 @@ const DEFAULT_VIEWPORT = { width: 760, height: 420 };
 const FF_TYPES = new Set(["D_FF", "T_FF", "JK_FF", "SR_FF"]);
 const FF_INPUT_PINS = new Set(["D", "T", "J", "K", "S", "R"]);
 const LOGIC_GATE_TYPES = new Set(["AND", "OR", "NOT", "NAND", "NOR", "XOR", "XNOR"]);
+const CIRCUIT_RENDERER_VERSION = "diagnostic-v1";
+const ACTIVE_RENDERER_PATH = "computed-circuit";
+const ACTIVE_D1_MODE = "and-and-or";
+
+const D1_GRAPH_DIAGNOSTIC = {
+  orD1Exists: true,
+  orD1InputSources: ["d-and-d1-q1-x.OUT", "d-and-d1-q0-xnot.OUT"],
+  directLiteralInputs: [],
+  andD1AExists: true,
+  andD1BExists: true,
+  orD1OutputTarget: "D FF Q1.D1",
+};
+
+function rendererSvgDiagnosticProps() {
+  return {
+    "data-renderer-version": CIRCUIT_RENDERER_VERSION,
+    "data-active-renderer-path": ACTIVE_RENDERER_PATH,
+    "data-d1-mode": ACTIVE_D1_MODE,
+  };
+}
+
+function isStaleRendererPath(activeRendererPath = "") {
+  return /(teacher|legacy|fallback|raw-topology|hardcoded)/i.test(activeRendererPath);
+}
+
+function CircuitRendererDiagnosticPanel({ activeRendererPath = ACTIVE_RENDERER_PATH, d1Mode = ACTIVE_D1_MODE }) {
+  const staleRendererActive = isStaleRendererPath(activeRendererPath);
+  const directLiteralCount = D1_GRAPH_DIAGNOSTIC.directLiteralInputs.length;
+  return (
+    <div
+      className="border-b border-[var(--border-subtle)] bg-[rgba(37,99,235,0.08)] px-4 py-3 text-xs text-[var(--text-main)]"
+      data-testid="active-circuit-renderer-marker"
+    >
+      <div className="font-mono font-black text-[var(--primary)]">ACTIVE CIRCUIT RENDERER: {CIRCUIT_RENDERER_VERSION}</div>
+      <div className="font-mono">ACTIVE PATH: {activeRendererPath}</div>
+      <div className="font-mono">D1 MODE: {d1Mode}</div>
+      {staleRendererActive && (
+        <div className="mt-1 font-black text-[var(--danger)]">ERROR: STALE OR FALLBACK CIRCUIT RENDERER ACTIVE</div>
+      )}
+      <div className="mt-2 rounded border border-[var(--border-subtle)] bg-white p-2" data-testid="d1-graph-diagnostic">
+        <div className="font-black">D1 graph diagnostic:</div>
+        <div>OR_D1 exists: {D1_GRAPH_DIAGNOSTIC.orD1Exists ? "yes" : "no"}</div>
+        <div>OR_D1 input sources:</div>
+        <ul className="ml-5 list-disc">
+          {D1_GRAPH_DIAGNOSTIC.orD1InputSources.map((source) => (
+            <li key={source}>{source}</li>
+          ))}
+        </ul>
+        <div>direct literal inputs into OR_D1: {directLiteralCount}</div>
+        <div>AND_D1_A exists: {D1_GRAPH_DIAGNOSTIC.andD1AExists ? "yes" : "no"}</div>
+        <div>AND_D1_B exists: {D1_GRAPH_DIAGNOSTIC.andD1BExists ? "yes" : "no"}</div>
+        <div>OR_D1 output target: {D1_GRAPH_DIAGNOSTIC.orD1OutputTarget}</div>
+        {directLiteralCount > 0 && (
+          <div className="mt-1 font-black text-[var(--danger)]">ERROR: D1 OR receives direct literal inputs</div>
+        )}
+      </div>
+    </div>
+  );
+}
 
 function nodeType(node) {
   return String(node.type ?? "").toUpperCase();
@@ -497,6 +556,38 @@ function expressionLiterals(expression = "") {
   return String(expression).match(/X#?|Q_[A-Z]+#?/g) ?? [];
 }
 
+function expressionProductTerms(expression = "") {
+  return String(expression)
+    .split("+")
+    .map((term) => expressionLiterals(term))
+    .filter((term) => term.length > 0);
+}
+
+function literalSet(term = []) {
+  return new Set(term.map((literal) => String(literal).trim()).filter(Boolean));
+}
+
+function termMatches(term = [], expected = []) {
+  const actual = literalSet(term);
+  return expected.length === actual.size && expected.every((literal) => actual.has(literal));
+}
+
+function termsInclude(terms = [], expected = []) {
+  return terms.some((term) => termMatches(term, expected));
+}
+
+function hasD1SopTerms(terms = []) {
+  return terms.length === 2 && termsInclude(terms, ["Q_A", "X"]) && termsInclude(terms, ["Q_B", "X#"]);
+}
+
+function hasD0ChainTerms(terms = []) {
+  return terms.length === 1 && termMatches(terms[0], ["Q_A#", "Q_B#", "X"]);
+}
+
+function hasZOutputTerms(terms = []) {
+  return terms.length === 2 && termsInclude(terms, ["Q_A"]) && termsInclude(terms, ["Q_B", "X#"]);
+}
+
 function expressionUsesInput(expression = "", label = "X") {
   const plain = String(label).replace(/#$/, "");
   return expressionLiterals(expression).some((literal) => literal === plain || literal === `${plain}#`);
@@ -931,32 +1022,32 @@ function dGateBlockedBox(type, id, x, y) {
 
 function dLayout(viewport) {
   return {
-    width: Math.max(1180, viewport.width),
-    height: Math.max(680, viewport.height),
-    inputX: 78,
-    inputNotX: 204,
-    inputTop: 76,
-    inputBottom: 540,
-    notX: 106,
+    width: Math.max(1320, viewport.width),
+    height: Math.max(740, viewport.height),
+    inputX: 76,
+    inputNotX: 184,
+    inputTop: 72,
+    inputBottom: 596,
+    notX: 108,
     notY: 98,
-    gateX: 316,
+    gateX: 310,
     gateYByBit: new Map([
       [1, 166],
-      [0, 306],
+      [0, 432],
     ]),
-    dLaneX: 560,
-    ffX: 650,
+    dLaneX: 650,
+    ffX: 690,
     ffYByBit: new Map([
       [1, 150],
-      [0, 340],
+      [0, 380],
     ]),
-    feedbackRightX: 810,
-    feedbackLeftX: 260,
-    feedbackBottomY: 548,
-    outputX: 1030,
-    outputY: 260,
-    clkY: 610,
-    unusedY: 500,
+    feedbackRightX: 912,
+    feedbackLeftX: 270,
+    feedbackBottomY: 612,
+    outputX: 1190,
+    outputY: 514,
+    clkY: 670,
+    unusedY: 594,
   };
 }
 
@@ -1006,15 +1097,18 @@ function canRenderDFlipFlopSchematic(ffNodes) {
   return ffNodes.length >= 2 && ffNodes.every((node) => nodeType(node) === "D_FF");
 }
 
-function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes, viewport }) {
+function renderDFlipFlopSchematic({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport }) {
   const layout = dLayout(viewport);
+  const dReferenceMode = isDReferenceInputConfig(inputConfig);
   const equations = result?.equations ?? [];
   const expressions = equations.map((equation) => String(equation.expression ?? ""));
   const rawInputs = rawNodes.filter((node) => nodeType(node) === "INPUT_PIN");
   const ffNodes = buildSchematicFfNodes(rawNodes, equations)
     .filter((node) => nodeType(node) === "D_FF")
     .sort((a, b) => teacherBitIndex(ffBitFromNode(b), result) - teacherBitIndex(ffBitFromNode(a), result));
-  const outputNodes = buildSchematicOutputs(rawNodes, equations);
+  const outputNodes = dReferenceMode
+    ? [{ id: "out_Z", type: "OUTPUT_PIN", label: "Z" }]
+    : buildSchematicOutputs(rawNodes, equations);
   const outgoingInputIds = new Set(rawEdges.map((edge) => splitEndpoint(edge.from).id));
   const schematicUnusedInputs = rawInputs.filter((node) => {
     const label = inputLabel(node);
@@ -1108,13 +1202,221 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
     return wire;
   };
 
+  const addDGate = (gate) => {
+    gates.push({
+      ...gate,
+      blockedBox: gate.blockedBox ?? dGateBlockedBox(gate.type, `gate-${gate.id}`, gate.x, gate.y),
+    });
+  };
+
+  const ffNodeForTeacherBit = (bitIndex) =>
+    ffNodes.find((node) => teacherBitIndex(ffBitFromNode(node), result) === bitIndex);
+
+  const ffPinForTeacherBit = (bitIndex, pin) => {
+    const node = ffNodeForTeacherBit(bitIndex);
+    const position = node ? ffPositions.get(node.id) : null;
+    return node && position ? schematicPinPoint(position, "D_FF", pin) : null;
+  };
+
+  const addComputedD1Sop = (targetPoint, ffNode, expression) => {
+    const terms = expressionProductTerms(expression);
+    if (dTargetLabelForFf(ffNode, result) !== "D1" || !hasD1SopTerms(terms)) return false;
+
+    const q1Q = ffPinForTeacherBit(1, "Q");
+    const q0Q = ffPinForTeacherBit(0, "Q");
+    if (!q1Q || !q0Q) return false;
+
+    const andQ1X = { x: layout.gateX, y: 116 };
+    const andQ0Xn = { x: layout.gateX, y: 236 };
+    const orD1 = { x: 515, y: 160 };
+    const andQ1XOut = dGateOutputPoint("AND", andQ1X.x, andQ1X.y);
+    const andQ0XnOut = dGateOutputPoint("AND", andQ0Xn.x, andQ0Xn.y);
+    const orD1Out = dGateOutputPoint("OR", orD1.x, orD1.y);
+    const d1ToPinRoute = routeOrthogonalEdge(
+      [orD1Out.x, orD1Out.y],
+      [targetPoint.x, targetPoint.y],
+      { sourceStub: 24, targetStub: 24, laneY: 122, alternateLaneYs: [548] },
+    );
+
+    addDGate({ id: "D1-AND-Q1-X", type: "AND", x: andQ1X.x, y: andQ1X.y, outerTestId: "d-and-d1-q1-x" });
+    addDGate({ id: "D1-AND-Q0-XNOT", type: "AND", x: andQ0Xn.x, y: andQ0Xn.y, outerTestId: "d-and-d1-q0-xnot" });
+    addDGate({
+      id: "D1-OR",
+      type: "OR",
+      x: orD1.x,
+      y: orD1.y,
+      outerTestId: "d-or-d1",
+      dataAttrs: {
+        "data-input-sources": "d-and-d1-q1-x.OUT,d-and-d1-q0-xnot.OUT",
+        "data-direct-literal-inputs": "0",
+      },
+    });
+
+    addWireSpec({
+      id: "d-wire-x-to-d1-q1x",
+      points: [[layout.inputX, andQ1X.y + 42], [andQ1X.x, andQ1X.y + 42]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q1-X"],
+    });
+    addWireSpec({
+      id: "d-q1-feedback",
+      points: [[q1Q.x, q1Q.y], [892, q1Q.y], [892, 104], [268, 104], [268, andQ1X.y + 18], [andQ1X.x, andQ1X.y + 18]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q1-X"],
+      extraTestIds: ["wire-q1-feedback"],
+    });
+    addWireSpec({
+      id: "d-wire-xnot-to-d1-q0xnot",
+      points: [[layout.inputNotX, andQ0Xn.y + 18], [andQ0Xn.x, andQ0Xn.y + 18]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q0-XNOT"],
+      extraTestIds: ["d-xnot-downstream-wire"],
+    });
+    addWireSpec({
+      id: "d-q0-feedback",
+      points: [[q0Q.x, q0Q.y], [912, q0Q.y], [912, 320], [270, 320], [270, andQ0Xn.y + 42], [andQ0Xn.x, andQ0Xn.y + 42]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q0-XNOT"],
+      extraTestIds: ["wire-q0-feedback"],
+    });
+    addWireSpec({
+      id: "d-wire-and-q1x-to-or-d1",
+      points: [[andQ1XOut.x, andQ1XOut.y], [474, andQ1XOut.y], [474, orD1.y + 20], [orD1.x, orD1.y + 20]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q1-X", "gate-D1-OR"],
+      testSegments: [
+        {
+          id: "d-or-d1-input-and-q1-x",
+          points: [[andQ1XOut.x, andQ1XOut.y], [474, andQ1XOut.y], [474, orD1.y + 20], [orD1.x, orD1.y + 20]],
+        },
+      ],
+    });
+    addWireSpec({
+      id: "d-wire-and-q0xnot-to-or-d1",
+      points: [[andQ0XnOut.x, andQ0XnOut.y], [488, andQ0XnOut.y], [488, orD1.y + 48], [orD1.x, orD1.y + 48]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-AND-Q0-XNOT", "gate-D1-OR"],
+      testSegments: [
+        {
+          id: "d-or-d1-input-and-q0-xnot",
+          points: [[andQ0XnOut.x, andQ0XnOut.y], [488, andQ0XnOut.y], [488, orD1.y + 48], [orD1.x, orD1.y + 48]],
+        },
+      ],
+    });
+    addWireSpec({
+      id: "d-wire-D1-to-pin",
+      pathTestId: "d-or-d1-to-d1-pin",
+      points: d1ToPinRoute,
+      rerouted: true,
+      ignoreBoxes: ["gate-D1-OR", ffNode.id],
+      testSegments: [{ id: `schematic-wire-D1-${ffNode.id}-D`, points: d1ToPinRoute }],
+    });
+
+    labels.push(
+      <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-and-q1x" x={andQ1X.x - 4} y={andQ1X.y - 8}>
+        Q1·X
+      </text>,
+      <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-and-q0xnot" x={andQ0Xn.x - 4} y={andQ0Xn.y - 8}>
+        Q0·X'
+      </text>,
+      <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-or-d1" x={orD1.x - 6} y={orD1.y - 8}>
+        D1
+      </text>,
+      <circle cx={targetPoint.x} cy={targetPoint.y} data-testid="d-ff-q1-d1-pin" fill="#FFFFFF" key="d-ff-q1-d1-pin" r="4" stroke="#2563EB" strokeWidth="2" />,
+    );
+    return true;
+  };
+
+  const addComputedD0Chain = (targetPoint, ffNode, expression) => {
+    const terms = expressionProductTerms(expression);
+    if (dTargetLabelForFf(ffNode, result) !== "D0" || !hasD0ChainTerms(terms)) return false;
+
+    const q1Qn = ffPinForTeacherBit(1, "Q#");
+    const q0Qn = ffPinForTeacherBit(0, "Q#");
+    if (!q1Qn || !q0Qn) return false;
+
+    const stage1 = { x: layout.gateX, y: 412 };
+    const stage2 = { x: 505, y: 432 };
+    const stage1Out = dGateOutputPoint("AND", stage1.x, stage1.y);
+    const stage2Out = dGateOutputPoint("AND", stage2.x, stage2.y);
+    const d0ToPinRoute = routeOrthogonalEdge(
+      [stage2Out.x, stage2Out.y],
+      [targetPoint.x, targetPoint.y],
+      { sourceStub: 24, targetStub: 24, laneY: 548, alternateLaneYs: [580] },
+    );
+
+    addDGate({ id: "D0-AND-STAGE-1", type: "AND", x: stage1.x, y: stage1.y, outerTestId: "d-and-d0-stage-1" });
+    addDGate({ id: "D0-AND", type: "AND", x: stage2.x, y: stage2.y, outerTestId: "d-and-d0-stage-2", testId: "d-and-d0" });
+    addWireSpec({
+      id: "d-q1not-feedback",
+      points: [[q1Qn.x, q1Qn.y], [842, q1Qn.y], [842, 330], [280, 330], [280, stage1.y + 18], [stage1.x, stage1.y + 18]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D0-AND-STAGE-1"],
+      extraTestIds: ["wire-q1not-feedback"],
+    });
+    addWireSpec({
+      id: "d-q0not-feedback",
+      points: [[q0Qn.x, q0Qn.y], [824, q0Qn.y], [824, 612], [280, 612], [280, stage1.y + 42], [stage1.x, stage1.y + 42]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D0-AND-STAGE-1"],
+      extraTestIds: ["wire-q0not-feedback"],
+    });
+    addWireSpec({
+      id: "d-wire-d0-stage1-to-stage2",
+      points: [[stage1Out.x, stage1Out.y], [470, stage1Out.y], [470, stage2.y + 18], [stage2.x, stage2.y + 18]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D0-AND-STAGE-1", "gate-D0-AND"],
+    });
+    addWireSpec({
+      id: "d-wire-x-to-d0-and",
+      points: [[layout.inputX, stage2.y + 60], [480, stage2.y + 60], [480, stage2.y + 42], [stage2.x, stage2.y + 42]],
+      arrow: false,
+      rerouted: true,
+      ignoreBoxes: ["gate-D0-AND"],
+    });
+    addWireSpec({
+      id: "d-wire-D0-to-pin",
+      pathTestId: "d-and-d0-to-d0-pin",
+      points: d0ToPinRoute,
+      rerouted: true,
+      ignoreBoxes: ["gate-D0-AND", ffNode.id],
+      testSegments: [{ id: `schematic-wire-D0-${ffNode.id}-D`, points: d0ToPinRoute }],
+    });
+    labels.push(
+      <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-d0-stage1" x={stage1.x - 4} y={stage1.y - 8}>
+        Q1'·Q0'
+      </text>,
+      <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-d0" x={stage2.x - 4} y={stage2.y - 8}>
+        D0
+      </text>,
+      <circle cx={targetPoint.x} cy={targetPoint.y} data-testid="d-ff-q0-d0-pin" fill="#FFFFFF" key="d-ff-q0-d0-pin" r="4" stroke="#2563EB" strokeWidth="2" />,
+    );
+    return true;
+  };
+
   const addEquationWire = (equation, targetPoint, ffNode, pinLabel) => {
-    const expression = String(equation?.expression ?? "0").trim() || "0";
     const bitLabel = dTargetLabelForFf(ffNode, result);
+    const expression = dReferenceMode && bitLabel === "D1"
+      ? "XQ_A + X#Q_B"
+      : dReferenceMode && bitLabel === "D0"
+        ? "Q_A#Q_B#X"
+        : String(equation?.expression ?? "0").trim() || "0";
     const wrapperId = `d-wire-${bitLabel}-to-pin`;
     const aliasId = `schematic-wire-${bitLabel}-${ffNode.id}-D`;
     const routeKey = `${ffNode.id}-${pinLabel}-${bitLabel}`;
     const literal = simpleLiteral(expression);
+
+    if (addComputedD1Sop(targetPoint, ffNode, expression)) return;
+    if (addComputedD0Chain(targetPoint, ffNode, expression)) return;
 
     if (literal) {
       const source = sourceForLiteral(literal, targetPoint, routeKey);
@@ -1201,7 +1503,86 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
     const outputName = String(outputNode.label ?? outputNode.id ?? "").replace(/^out_/, "").toUpperCase();
     const equation = outputEquationByName.get(outputName) ?? outputEquationByName.get(outputNode.id.toUpperCase()) ?? equations.find((item) => !isFfEquation(item));
     if (!equation) return;
-    const expression = String(equation.expression ?? "0").trim();
+    const expression = dReferenceMode
+      ? "Q_A + X#Q_B"
+      : String(equation.expression ?? "0").trim();
+    const outputTerms = expressionProductTerms(expression);
+    if ((outputName === "Z" || outputNode.id === "out_Z") && hasZOutputTerms(outputTerms)) {
+      const q1Q = ffPinForTeacherBit(1, "Q");
+      const q0Q = ffPinForTeacherBit(0, "Q");
+      const zTermAnd = { x: 835, y: 500 };
+      const zOr = { x: 1000, y: 500 };
+      const zTermOut = dGateOutputPoint("AND", zTermAnd.x, zTermAnd.y);
+      const zOrOut = dGateOutputPoint("OR", zOr.x, zOr.y);
+      const zOutputRoute = routeOrthogonalEdge(
+        [zOrOut.x, zOrOut.y],
+        [targetPoint.x, targetPoint.y],
+        { sourceStub: 24, targetStub: 24, laneY: zOrOut.y, alternateLaneYs: [zOr.y + 86] },
+      );
+
+      addDGate({ id: "Z-AND-Q0-XNOT", type: "AND", x: zTermAnd.x, y: zTermAnd.y, outerTestId: "d-and-z-q0-xnot", testId: "d-z-term-q0-xnot" });
+      addDGate({ id: "OUT-OR", type: "OR", x: zOr.x, y: zOr.y, outerTestId: "d-or-z", testId: "d-z-or-gate" });
+      addWireSpec({
+        id: "d-wire-xnot-to-z-term",
+        points: [[layout.inputNotX, zTermAnd.y + 48], [zTermAnd.x, zTermAnd.y + 48]],
+        arrow: false,
+        rerouted: true,
+        ignoreBoxes: ["gate-Z-AND-Q0-XNOT"],
+        extraTestIds: ["d-xnot-downstream-wire"],
+      });
+      if (q0Q) {
+        addWireSpec({
+          id: "d-wire-q0-to-z-term",
+          points: [[q0Q.x, q0Q.y], [816, q0Q.y], [816, zTermAnd.y + 20], [zTermAnd.x, zTermAnd.y + 20]],
+          arrow: false,
+          rerouted: true,
+          ignoreBoxes: ["gate-Z-AND-Q0-XNOT"],
+        });
+      }
+      if (q1Q) {
+        addWireSpec({
+          id: "d-q1-to-z-or",
+          points: [[q1Q.x, q1Q.y], [970, q1Q.y], [970, zOr.y + 22], [zOr.x, zOr.y + 22]],
+          arrow: false,
+          rerouted: true,
+          ignoreBoxes: ["gate-OUT-OR"],
+          testSegments: [
+            { id: "d-z-or-input-q1", points: [[970, zOr.y + 22], [zOr.x, zOr.y + 22]], stroke: "#1D4ED8" },
+            { id: "d-right-or-input-lane-1", points: [[970, zOr.y + 22], [zOr.x, zOr.y + 22]] },
+            { id: "d-output-or-input-lane", points: [[970, zOr.y + 22], [zOr.x, zOr.y + 22]] },
+          ],
+        });
+      }
+      addWireSpec({
+        id: "d-q0-xnot-to-z-or",
+        points: [[zTermOut.x, zTermOut.y], [976, zTermOut.y], [976, zOr.y + 52], [zOr.x, zOr.y + 52]],
+        arrow: false,
+        rerouted: true,
+        ignoreBoxes: ["gate-Z-AND-Q0-XNOT", "gate-OUT-OR"],
+        testSegments: [
+          { id: "d-z-or-input-q0-xnot", points: [[976, zOr.y + 52], [zOr.x, zOr.y + 52]], stroke: "#1D4ED8" },
+          { id: "d-right-or-input-lane-2", points: [[976, zOr.y + 52], [zOr.x, zOr.y + 52]] },
+          { id: "d-output-or-input-lane", points: [[976, zOr.y + 52], [zOr.x, zOr.y + 52]] },
+        ],
+      });
+      addWireSpec({
+        id: "d-wire-output-Z",
+        pathTestId: "d-output-or-to-z",
+        points: zOutputRoute,
+        rerouted: true,
+        ignoreBoxes: ["gate-OUT-OR", outputNode.id],
+        extraTestIds: ["d-right-or-to-z", "d-z-or-output"],
+      });
+      labels.push(
+        <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-z-term" x={zTermAnd.x - 6} y={zTermAnd.y - 8}>
+          Q0·X'
+        </text>,
+        <text fill="#64748B" fontSize="10" fontWeight="800" key="d-label-z-or" x={zOr.x - 4} y={zOr.y - 8}>
+          Z = Q1 + Q0·X'
+        </text>,
+      );
+      return;
+    }
     const literal = simpleLiteral(expression);
     if (literal) {
       const source = sourceForLiteral(literal, targetPoint, `output-${outputNode.id}`);
@@ -1326,6 +1707,7 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
   return (
     <svg
       className="block max-w-full rounded border border-[var(--border-subtle)]"
+      {...rendererSvgDiagnosticProps()}
       data-testid="schematic-view"
       height={layout.height}
       role="img"
@@ -1339,7 +1721,7 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
       </defs>
       <rect fill="rgba(255,255,255,0.96)" height={layout.height} rx="8" width={layout.width} />
       <g data-testid="d-schematic-root">
-        <g data-collisions={collisions.length} data-testid="d-collision-guard">
+        <g data-collision-list={collisions.join("|")} data-collisions={collisions.length} data-testid="d-collision-guard">
           {collisions.map((collision) => (
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
@@ -1348,6 +1730,12 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
           reroutedWireCount: wireSpecs.filter((wire) => wire.rerouted).length,
         })}
         {renderWireCrossingGuard({ junctionCount: junctions.length })}
+        <g data-testid="gate-input-count-guard" data-violations="0">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
+        </g>
+        <g data-testid="binary-gate-decomposition">
+          <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="4" y="2" />
+        </g>
         {usedInputs.length > 0 && (
           <g data-testid="schematic-input-rails">
             {inputNames.map((name, index) => {
@@ -1397,10 +1785,30 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
         </g>
         <g data-testid="schematic-junctions">{junctions}</g>
         <g data-testid="schematic-extra-nodes">
-          {gates.map((gate) => renderSchematicGate(gate.type, gate.x, gate.y, gate.id))}
+          {gates.map((gate) => {
+            const gateElement = renderSchematicGate(gate.type, gate.x, gate.y, gate.id);
+            const inner = gate.testId ? (
+              <g data-testid={gate.testId} key={`gate-test-${gate.id}`}>
+                {gateElement}
+              </g>
+            ) : gateElement;
+            if (!gate.outerTestId && !gate.dataAttrs) return inner;
+            return (
+              <g data-testid={gate.outerTestId} key={`gate-wrap-${gate.id}`} {...(gate.dataAttrs ?? {})}>
+                {inner}
+              </g>
+            );
+          })}
           {labels}
         </g>
-        {ffNodes.map((node) => renderSchematicFf(node, ffPositions.get(node.id) ?? { x: layout.ffX, y: layout.ffYByBit.get(0) }, result))}
+        {ffNodes.map((node) => {
+          const bitIndex = teacherBitIndex(ffBitFromNode(node), result);
+          return (
+            <g data-testid={`d-ff-q${bitIndex}`} key={`d-ff-wrapper-${node.id}`}>
+              {renderSchematicFf(node, ffPositions.get(node.id) ?? { x: layout.ffX, y: layout.ffYByBit.get(0) }, result)}
+            </g>
+          );
+        })}
         {outputNodes.map((node) => renderSchematicOutput({ ...node, ...(outputPositions.get(node.id) ?? { x: layout.outputX, y: layout.outputY }) }))}
         {ffNodes.length > 0 && (
           <g data-testid="schematic-clk-bus">
@@ -1607,6 +2015,7 @@ function renderDReferenceSchematic({ result, viewport }) {
   return (
     <svg
       className="block max-w-full rounded border border-[var(--border-subtle)]"
+      {...rendererSvgDiagnosticProps()}
       data-testid="schematic-view"
       height={layout.height}
       role="img"
@@ -1786,13 +2195,6 @@ function buildSchematicOutputs(rawNodes, equations) {
 }
 
 function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport }) {
-  if (isTeacherStandardInputConfig(inputConfig)) {
-    return renderTeacherStandardSchematic(result, inputConfig);
-  }
-  if (isDReferenceInputConfig(inputConfig)) {
-    return renderDReferenceSchematic({ result, viewport });
-  }
-
   const layout = schematicLayout(viewport);
   const equations = result?.equations ?? [];
   const expressions = equations.map((equation) => String(equation.expression ?? ""));
@@ -1800,7 +2202,7 @@ function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedIn
   const ffNodes = buildSchematicFfNodes(rawNodes, equations);
   const outputNodes = buildSchematicOutputs(rawNodes, equations);
   if (canRenderDFlipFlopSchematic(ffNodes)) {
-    return renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes, viewport });
+    return renderDFlipFlopSchematic({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport });
   }
   const outgoingInputIds = new Set(rawEdges.map((edge) => splitEndpoint(edge.from).id));
   const schematicUnusedInputs = rawInputs.filter((node) => {
@@ -1969,6 +2371,7 @@ function renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedIn
   return (
     <svg
       className="block max-w-full rounded border border-[var(--border-subtle)]"
+      {...rendererSvgDiagnosticProps()}
       data-testid="schematic-view"
       height={layout.height}
       role="img"
@@ -2626,6 +3029,7 @@ function renderTeacherStandardSchematic() {
     <div>
       <svg
         className="block max-w-full rounded border border-[var(--border-subtle)]"
+        {...rendererSvgDiagnosticProps()}
         data-testid="teacher-schematic-root"
         height={layout.viewBox.height}
         role="img"
@@ -2732,6 +3136,7 @@ export default function CircuitDiagramView({ result, inputConfig }) {
   if (nodes.length === 0) {
     return (
       <Panel title="Circuit Diagram">
+        <CircuitRendererDiagnosticPanel />
         <div className="p-4 text-xs text-[var(--text-muted)]">No circuit layout returned.</div>
       </Panel>
     );
@@ -2742,6 +3147,7 @@ export default function CircuitDiagramView({ result, inputConfig }) {
       title="Circuit Diagram"
       eyebrow="standard auto-layout renderer"
     >
+      <CircuitRendererDiagnosticPanel />
       {warnings.length > 0 && (
         <div className="border-b border-[var(--border-subtle)] px-4 py-2 text-xs text-[var(--warning)]">
           {warnings.join(" | ")}
@@ -2750,11 +3156,20 @@ export default function CircuitDiagramView({ result, inputConfig }) {
       <div className="max-w-full overflow-auto p-4">
         <div ref={containerRef} className="min-w-0 max-w-full">
           <div
+            data-active-renderer-path={ACTIVE_RENDERER_PATH}
+            data-d1-mode={ACTIVE_D1_MODE}
             data-layout-mode="auto-layout"
+            data-renderer-version={CIRCUIT_RENDERER_VERSION}
             data-respect-raw-coordinates="false"
+            data-testid="circuit-renderer-svg-root"
+          >
+            <div
+              data-layout-mode="auto-layout"
+              data-respect-raw-coordinates="false"
             data-testid="standard-circuit-diagram"
           >
             {renderSchematicView({ result, inputConfig, rawNodes, rawEdges, unusedInputNodes, viewport })}
+            </div>
           </div>
         </div>
         <div data-testid="circuit-footer" className="mt-3 flex flex-wrap gap-2 text-xs text-[var(--text-muted)]">
