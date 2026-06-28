@@ -1,0 +1,9 @@
+node_modules/
+dist/
+test-results/
+playwright-report/
+*.log
+engine/fsm_solver
+engine/fsm_solver.exe
+Thumbs.db
+.DS_Store

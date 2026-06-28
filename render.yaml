@@ -1,0 +1,13 @@
+services:
+  - type: web
+    name: tunas-eda-website
+    env: docker
+    dockerfilePath: ./Dockerfile
+    healthCheckPath: /api/health
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: FSM_SOLVER_PATH
+        value: engine/fsm_solver
+      - key: VITE_API_BASE_URL
+        value: /api

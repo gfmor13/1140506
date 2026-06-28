@@ -1,0 +1,16 @@
+{
+  "input_mode": "TIMING_TRACE",
+  "fsm_model": "Mealy",
+  "ff_type": "D",
+  "state_count": 2,
+  "input_count": 1,
+  "output_count": 1,
+  "states": ["S0", "S1"],
+  "inputs": ["X"],
+  "outputs": ["Z"],
+  "transitions": [],
+  "timing_trace": {
+    "X": ["0", "2", "1", "0"],
+    "Z": ["0", "1", "0", "1"]
+  }
+}

@@ -1,0 +1,84 @@
+{
+  "status": "OK",
+  "metadata": {
+    "engine": "phase1_minimal_solver",
+    "input_mode": "STATE_TABLE",
+    "fsm_model": "Mealy",
+    "ff_type": "D",
+    "state_count": 2,
+    "input_count": 1,
+    "output_count": 1,
+    "state_bits": ["Q_A", "Q_B"],
+    "inputs": ["X"],
+    "outputs": ["Y"]
+  },
+  "equations": [
+    {
+      "target": "Y",
+      "expression": "Y = XQ_B#",
+      "raw_terms": ["X", "Q_B#"]
+    }
+  ],
+  "k_maps": [
+    {
+      "id": "kmap_Y",
+      "target": "Y",
+      "variables": ["X", "Q_B"],
+      "cells": [
+        { "id": "m0", "coords": [0, 0], "value": 0 },
+        { "id": "m1", "coords": [0, 1], "value": 1 },
+        { "id": "m2", "coords": [1, 0], "value": 0 },
+        { "id": "m3", "coords": [1, 1], "value": 1 }
+      ],
+      "groups": [
+        { "id": "g_Y_0", "cells": ["m1", "m3"], "term": "XQ_B#" }
+      ]
+    }
+  ],
+  "state_graph": {
+    "states": [
+      { "id": "S0", "label": "S0" },
+      { "id": "S1", "label": "S1" }
+    ],
+    "transitions": [
+      { "from": "S0", "to": "S0", "input": "X=0", "output": "Y=0" },
+      { "from": "S0", "to": "S1", "input": "X=1", "output": "Y=1" },
+      { "from": "S1", "to": "S0", "input": "X=0", "output": "Y=0" },
+      { "from": "S1", "to": "S1", "input": "X=1", "output": "Y=1" }
+    ]
+  },
+  "timing_diagram": {
+    "signals": [
+      { "name": "CLK", "values": [0, 1, 0, 1, 0, 1] },
+      { "name": "X", "values": [0, 1, 1, 0, 1, 0] },
+      { "name": "Q_A", "values": [0, 0, 1, 1, 0, 0] },
+      { "name": "Q_B", "values": [0, 1, 1, 0, 0, 1] },
+      { "name": "Y", "values": [0, 1, 1, 0, 1, 0] }
+    ]
+  },
+  "circuit_layout": {
+    "nodes": [
+      { "id": "in_X", "type": "input", "label": "X", "x": 40, "y": 80 },
+      { "id": "ff_B", "type": "flip_flop", "label": "D FF B", "x": 40, "y": 200 },
+      { "id": "and_Y", "type": "and_gate", "label": "AND", "x": 300, "y": 130 },
+      { "id": "out_Y", "type": "output", "label": "Y", "x": 560, "y": 130 }
+    ],
+    "edges": [
+      { "from": "in_X.OUT", "to": "and_Y.IN0", "signal": "X" },
+      { "from": "ff_B.Q#", "to": "and_Y.IN1", "signal": "Q_B#" },
+      { "from": "and_Y.OUT", "to": "out_Y.IN", "signal": "Y" }
+    ]
+  },
+  "debug": {
+    "engine": "phase1_minimal_solver",
+    "received_input": {
+      "input_mode": "STATE_TABLE",
+      "fsm_model": "Mealy",
+      "ff_type": "D",
+      "state_count": 2,
+      "input_count": 1,
+      "output_count": 1
+    },
+    "note": "deterministic scaffold result for Phase 1A"
+  }
+}

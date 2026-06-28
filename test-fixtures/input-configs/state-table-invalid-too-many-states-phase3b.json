@@ -1,0 +1,13 @@
+{
+  "input_mode": "STATE_TABLE",
+  "fsm_model": "Mealy",
+  "ff_type": "D",
+  "state_count": 9,
+  "input_count": 1,
+  "output_count": 1,
+  "states": ["S0", "S1", "S2", "S3", "S4", "S5", "S6", "S7", "S8"],
+  "inputs": ["X"],
+  "outputs": ["Y"],
+  "transitions": [],
+  "timing_trace": null
+}
