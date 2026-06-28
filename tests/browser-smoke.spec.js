@@ -322,6 +322,10 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-body", "0");
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-gate-body", "0");
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-ff-body", "0");
+  const teacherReroutedWireCount = await page.getByTestId("wire-body-collision-guard").evaluate((element) =>
+    Number(element.getAttribute("data-rerouted-wire-count") ?? "0"),
+  );
+  expect(teacherReroutedWireCount).toBeGreaterThan(0);
   await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-unclassified-crossings", "0");
   await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-orphan-bridges", "0");
   await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-bridge-on-junction", "0");
@@ -435,20 +439,20 @@ test("EDA workbench browser smoke", async ({ page }) => {
     const expectedPaths = {
       "teacher-wire-X-NOT": "M 120 100 V 152 H 110",
       "teacher-wire-NOT-Xn": "M 180 152 H 230",
-      "teacher-wire-Xn-J1": "M 230 208 H 340",
-      "teacher-wire-Q0-to-J1": "M 300 232 H 340",
-      "teacher-wire-J1": "M 444 222 H 585 V 210 H 620",
-      "teacher-wire-Xn-K1": "M 230 270 H 585 V 250 H 620",
-      "teacher-wire-X-J0": "M 200 100 V 432 H 340",
-      "teacher-wire-Q1n-feedback": "M 770 250 H 785 V 140 H 1110 V 635 H 320 V 408 H 340",
-      "teacher-wire-J0": "M 444 422 H 810 V 210 H 850",
-      "teacher-wire-Q0-feedback": "M 1000 210 H 1090 V 600 H 300 V 232",
-      "teacher-wire-Q0-to-ZTERM": "M 300 518 H 680",
-      "teacher-wire-Xn-ZTERM": "M 230 542 H 680",
-      "teacher-wire-ZTERM-OR": "M 784 532 H 900 V 548 H 950",
-      "teacher-wire-CONST1-K0": "M 724 351 H 830 V 250 H 850",
-      "teacher-wire-Q1-Z": "M 770 210 H 790 V 522 H 950",
-      "teacher-wire-ORZ-Z": "M 1060 532 H 1120 V 520 H 1160",
+      "teacher-wire-Xn-J1": "M 230 208 H 260 V 180 H 310 V 208 H 340",
+      "teacher-wire-Q0-to-J1": "M 286 232 H 316 V 260 H 326 V 232 H 340",
+      "teacher-wire-J1": "M 444 222 H 474 V 176 H 585 V 210 H 620",
+      "teacher-wire-Xn-K1": "M 230 270 H 260 V 294 H 588 V 250 H 620",
+      "teacher-wire-X-J0": "M 200 100 H 230 V 468 H 310 V 432 H 340",
+      "teacher-wire-Q1n-feedback": "M 770 250 H 805 V 124 H 1130 V 652 H 326 V 408 H 340",
+      "teacher-wire-J0": "M 444 422 H 480 V 300 H 812 V 210 H 850",
+      "teacher-wire-Q0-feedback": "M 1000 210 H 1088 V 616 H 286 V 232",
+      "teacher-wire-Q0-to-ZTERM": "M 286 518 H 650 H 680",
+      "teacher-wire-Xn-ZTERM": "M 230 542 H 260 V 574 H 650 V 542 H 680",
+      "teacher-wire-ZTERM-OR": "M 784 532 H 820 V 590 H 920 V 548 H 950",
+      "teacher-wire-CONST1-K0": "M 724 351 H 760 V 312 H 834 V 250 H 850",
+      "teacher-wire-Q1-Z": "M 770 210 H 810 V 480 H 918 V 522 H 950",
+      "teacher-wire-ORZ-Z": "M 1060 532 H 1092 V 520 H 1160",
       "jk-clk-entry-q1": "M 695 290 V 312 H 608 V 690",
       "jk-clk-entry-q0": "M 925 290 V 615 H 1000 V 690",
     };
@@ -460,9 +464,13 @@ test("EDA workbench browser smoke", async ({ page }) => {
     const or2BeforeOutput = orZ.right < output.left - 8;
     const equationsClear = equationsPanel.top > svg.bottom + 4 || equationsPanel.left > svg.right + 4;
     const noInitialOverflow = svgElement.parentElement.scrollWidth <= svgElement.parentElement.clientWidth + 1;
+    const legacyRoutesGone =
+      pathD("teacher-wire-J0") !== "M 444 422 H 810 V 210 H 850" &&
+      pathD("teacher-wire-Q1-Z") !== "M 770 210 H 790 V 522 H 950";
     return (
       viewBox === "0 0 1320 820" &&
       lanesMatch &&
+      legacyRoutesGone &&
       inputGatesBeforeFfs &&
       gatesClear &&
       outputInside &&
@@ -643,6 +651,10 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-body", "0");
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-gate-body", "0");
   await expect(page.getByTestId("wire-body-collision-guard")).toHaveAttribute("data-wire-through-ff-body", "0");
+  const dReroutedWireCount = await page.getByTestId("wire-body-collision-guard").evaluate((element) =>
+    Number(element.getAttribute("data-rerouted-wire-count") ?? "0"),
+  );
+  expect(dReroutedWireCount).toBeGreaterThan(0);
   await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-unclassified-crossings", "0");
   await expect(page.getByTestId("wire-crossing-guard")).toHaveAttribute("data-orphan-bridges", "0");
   await expect(page.getByTestId("d-and-d0-stage-1")).toBeVisible();
@@ -766,15 +778,17 @@ test("EDA workbench browser smoke", async ({ page }) => {
       outputOr && q1NotFeedback && q0NotFeedback &&
       q1NotFeedback.x + q1NotFeedback.width < outputOr.x - 80 &&
       q0NotFeedback.x + q0NotFeedback.width < outputOr.x - 80;
-    const d1OutputHorizontalToPin =
+    const d1PathChanged = document.querySelector('[data-testid="d-or-d1-to-d1-pin"]')?.getAttribute("d") !== "M 633 194 H 690";
+    const d1OutputReroutedToPin =
       d1ToPin && d1Pin &&
-      Math.abs((d1ToPin.y + d1ToPin.height / 2) - (d1Pin.y + d1Pin.height / 2)) < 4 &&
+      d1PathChanged &&
+      d1ToPin.height > 40 &&
       d1ToPin.x + d1ToPin.width >= d1Pin.x - 2;
     const d1FeedbackKeptAwayFromZOr =
       outputOr && d1Q1Feedback && d1Q0Feedback &&
       d1Q1Feedback.x + d1Q1Feedback.width < outputOr.x - 70 &&
       d1Q0Feedback.x + d1Q0Feedback.width < outputOr.x - 70;
-    return Boolean(xNotDownstream && clkStaysOutsideFfs && outputAligned && inputLanesSeparated && zInputLanesSeparated && inputApproachGap && feedbackBusAway && invertedFeedbackKeptAway && d1OutputHorizontalToPin && d1FeedbackKeptAwayFromZOr);
+    return Boolean(xNotDownstream && clkStaysOutsideFfs && outputAligned && inputLanesSeparated && zInputLanesSeparated && inputApproachGap && feedbackBusAway && invertedFeedbackKeptAway && d1OutputReroutedToPin && d1FeedbackKeptAwayFromZOr);
   });
   expect(dFinalRoutingQuality).toBe(true);
   const dSchematicQuality = await page.evaluate(() => {
@@ -826,6 +840,7 @@ test("EDA workbench browser smoke", async ({ page }) => {
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("bridge arc count");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("junction dot count");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("orphan bridge count: 0");
+  await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText(/rerouted wire count: [1-9]/);
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("gate input count violations: 0");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("merged FF output bus violations: 0");
   await expect(page.getByTestId("circuit-layout-diagnostic")).toContainText("Show node bounding boxes");

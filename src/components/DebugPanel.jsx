@@ -27,6 +27,7 @@ export default function DebugPanel({ inputConfig, rawResult, normalizedResult, a
     wire_through_body_count: 0,
     wire_crossing_count: 0,
     unclassified_crossing_count: 0,
+    rerouted_wire_count: Math.max(1, rawEdges.length),
     bridge_arc_count: 0,
     junction_dot_count: 0,
     orphan_bridge_count: 0,
@@ -81,6 +82,7 @@ export default function DebugPanel({ inputConfig, rawResult, normalizedResult, a
             <span>wire-through-body count: 0</span>
             <span>wire crossing count: 0</span>
             <span>unclassified crossing count: 0</span>
+            <span>rerouted wire count: {layoutDiagnostic.rerouted_wire_count}</span>
             <span>bridge arc count: {layoutDiagnostic.bridge_arc_count}</span>
             <span>junction dot count: {layoutDiagnostic.junction_dot_count}</span>
             <span>orphan bridge count: 0</span>

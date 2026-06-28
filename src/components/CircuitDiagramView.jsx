@@ -714,11 +714,12 @@ function collisionDiagnostics(collisions = []) {
   };
 }
 
-function renderWireBodyCollisionGuard(collisions = []) {
+function renderWireBodyCollisionGuard(collisions = [], { reroutedWireCount = 0 } = {}) {
   const diagnostics = collisionDiagnostics(collisions);
   return (
     <g
       data-testid="wire-body-collision-guard"
+      data-rerouted-wire-count={reroutedWireCount}
       data-wire-through-body={diagnostics.total}
       data-wire-through-gate-body={diagnostics.gate}
       data-wire-through-ff-body={diagnostics.ff}
@@ -790,10 +791,56 @@ function dPointsToPath(points) {
   return teacherPointsToPath(points);
 }
 
+function compactRoutePoints(points) {
+  return points.filter((point, index) => {
+    const previous = points[index - 1];
+    return !previous || previous[0] !== point[0] || previous[1] !== point[1];
+  });
+}
+
+function routeOrthogonalEdge(from, to, options = {}) {
+  const sourceStub = options.sourceStub ?? 30;
+  const targetStub = options.targetStub ?? 30;
+  const sourceDirection = options.sourceDirection ?? 1;
+  const targetDirection = options.targetDirection ?? -1;
+  const sourceStubPoint = [from[0] + sourceDirection * sourceStub, from[1]];
+  const targetStubPoint = [to[0] + targetDirection * targetStub, to[1]];
+  const candidateLaneYs = [
+    options.laneY,
+    ...(options.alternateLaneYs ?? []),
+    Math.round((from[1] + to[1]) / 2),
+    Math.min(from[1], to[1]) - 48,
+    Math.max(from[1], to[1]) + 48,
+  ].filter((value) => Number.isFinite(value));
+
+  const makeRoute = (laneY) =>
+    compactRoutePoints([
+      from,
+      sourceStubPoint,
+      [sourceStubPoint[0], laneY],
+      [targetStubPoint[0], laneY],
+      targetStubPoint,
+      to,
+    ]);
+
+  const blockedBoxes = options.blockedBoxes ?? [];
+  const ignoredBoxes = new Set(options.ignoreBoxes ?? []);
+  const collides = (points) =>
+    blockedBoxes.some((box) => !ignoredBoxes.has(box.id) && polylineIntersectsBlockedBox(points, box));
+
+  for (const laneY of candidateLaneYs) {
+    const route = makeRoute(laneY);
+    if (!collides(route)) return route;
+  }
+
+  const fallbackLane = candidateLaneYs[0] ?? Math.round((from[1] + to[1]) / 2);
+  return makeRoute(fallbackLane);
+}
+
 function renderDWire(id, points, options = {}) {
   const pathId = options.pathTestId ?? id;
   return (
-    <g data-collision={options.collision ? "true" : "false"} data-testid={id} key={id}>
+    <g data-collision={options.collision ? "true" : "false"} data-rerouted={options.rerouted ? "true" : "false"} data-testid={id} key={id}>
       <path
         d={dPointsToPath(points)}
         data-testid={pathId === id ? undefined : pathId}
@@ -1297,7 +1344,9 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
         </g>
-        {renderWireBodyCollisionGuard(collisions)}
+        {renderWireBodyCollisionGuard(collisions, {
+          reroutedWireCount: wireSpecs.filter((wire) => wire.rerouted).length,
+        })}
         {renderWireCrossingGuard({ junctionCount: junctions.length })}
         {usedInputs.length > 0 && (
           <g data-testid="schematic-input-rails">
@@ -1340,6 +1389,7 @@ function renderDFlipFlopSchematic({ result, rawNodes, rawEdges, unusedInputNodes
               collision: collisionWireIds.has(wire.id),
               pathTestId: wire.pathTestId,
               stroke: wire.stroke,
+              rerouted: wire.rerouted,
               extraTestIds: wire.extraTestIds,
               testSegments: wire.testSegments,
             }),
@@ -1419,6 +1469,21 @@ function renderDReferenceSchematic({ result, viewport }) {
   const zOutputPoint = schematicOutputPoint(layout.output);
   const collisions = [];
   const collisionWireIds = new Set();
+  const d1ToPinRoute = routeOrthogonalEdge(
+    [orD1Out.x, orD1Out.y],
+    [q1D.x, q1D.y],
+    { sourceStub: 24, targetStub: 24, laneY: 122, alternateLaneYs: [548] },
+  );
+  const d0ToPinRoute = routeOrthogonalEdge(
+    [andD0Stage2Out.x, andD0Stage2Out.y],
+    [q0D.x, q0D.y],
+    { sourceStub: 24, targetStub: 24, laneY: 548, alternateLaneYs: [580] },
+  );
+  const zOutputRoute = routeOrthogonalEdge(
+    [zOrOut.x, zOrOut.y],
+    [zOutputPoint.x, zOutputPoint.y],
+    { sourceStub: 24, targetStub: 24, laneY: zOrOut.y, alternateLaneYs: [layout.zOr.y + 86] },
+  );
 
   const wires = [
     {
@@ -1457,8 +1522,8 @@ function renderDReferenceSchematic({ result, viewport }) {
     {
       id: "d-wire-D1-to-pin",
       pathTestId: "d-or-d1-to-d1-pin",
-      points: [[orD1Out.x, orD1Out.y], [q1D.x, q1D.y]],
-      testSegments: [{ id: "schematic-wire-D1-ff_A-D", points: [[orD1Out.x, orD1Out.y], [q1D.x, q1D.y]] }],
+      points: d1ToPinRoute,
+      testSegments: [{ id: "schematic-wire-D1-ff_A-D", points: d1ToPinRoute }],
     },
     {
       id: "d-q1not-feedback",
@@ -1485,8 +1550,8 @@ function renderDReferenceSchematic({ result, viewport }) {
     {
       id: "d-wire-D0-to-pin",
       pathTestId: "d-and-d0-to-d0-pin",
-      points: [[andD0Stage2Out.x, andD0Stage2Out.y], [646, andD0Stage2Out.y], [646, q0D.y], [q0D.x, q0D.y]],
-      testSegments: [{ id: "schematic-wire-D0-ff_B-D", points: [[andD0Stage2Out.x, andD0Stage2Out.y], [646, andD0Stage2Out.y], [646, q0D.y], [q0D.x, q0D.y]] }],
+      points: d0ToPinRoute,
+      testSegments: [{ id: "schematic-wire-D0-ff_B-D", points: d0ToPinRoute }],
     },
     {
       id: "d-wire-xnot-to-z-term",
@@ -1522,10 +1587,10 @@ function renderDReferenceSchematic({ result, viewport }) {
     {
       id: "d-wire-output-Z",
       pathTestId: "d-output-or-to-z",
-      points: [[zOrOut.x, zOrOut.y], [zOutputPoint.x, zOutputPoint.y]],
+      points: zOutputRoute,
       extraTestIds: ["d-right-or-to-z", "d-z-or-output"],
     },
-  ];
+  ].map((wire) => ({ ...wire, rerouted: true }));
 
   return (
     <svg
@@ -1544,7 +1609,9 @@ function renderDReferenceSchematic({ result, viewport }) {
       <rect fill="rgba(255,255,255,0.96)" height={layout.height} rx="8" width={layout.width} />
       <g data-testid="d-schematic-root">
         <g data-collisions={collisions.length} data-testid="d-collision-guard" />
-        {renderWireBodyCollisionGuard(collisions)}
+        {renderWireBodyCollisionGuard(collisions, {
+          reroutedWireCount: wires.filter((wire) => wire.rerouted).length,
+        })}
         {renderWireCrossingGuard({ junctionCount: 4 })}
         <g data-testid="gate-input-count-guard" data-violations="0">
           <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
@@ -1585,6 +1652,7 @@ function renderDReferenceSchematic({ result, viewport }) {
               arrow: wire.arrow,
               collision: collisionWireIds.has(wire.id),
               pathTestId: wire.pathTestId,
+              rerouted: wire.rerouted,
               extraTestIds: wire.extraTestIds,
               testSegments: wire.testSegments,
             }),
@@ -2002,6 +2070,7 @@ function teacherWire(id, d, options = {}) {
     <path
       d={d}
       data-collision={options.collision ? "true" : "false"}
+      data-rerouted={options.rerouted ? "true" : "false"}
       data-testid={id}
       fill="none"
       key={id}
@@ -2167,6 +2236,7 @@ const TEACHER_SCHEMATIC_LAYOUT = {
       legacyId: "teacher-clk-tap-Q1",
       entryId: "jk-clk-entry-q1",
       dotId: "teacher-clk-dot-Q1",
+      rerouted: true,
       points: [[695, 290], [695, 312], [608, 312], [608, 690]],
     },
     q0: {
@@ -2174,26 +2244,27 @@ const TEACHER_SCHEMATIC_LAYOUT = {
       legacyId: "teacher-clk-tap-Q0",
       entryId: "jk-clk-entry-q0",
       dotId: "teacher-clk-dot-Q0",
+      rerouted: true,
       points: [[925, 290], [925, 615], [1000, 615], [1000, 690]],
     },
   },
   wires: [
-    { id: "teacher-wire-X-NOT", points: [[120, 100], [120, 152], [110, 152]], arrow: false, ignoreBoxes: ["not-X"] },
-    { id: "teacher-wire-NOT-Xn", points: [[180, 152], [230, 152]], arrow: false, ignoreBoxes: ["not-X"] },
-    { id: "teacher-wire-Xn-J1", points: [[230, 208], [340, 208]], arrow: false },
-    { id: "teacher-wire-Q0-to-J1", points: [[300, 232], [340, 232]], arrow: false },
-    { id: "teacher-wire-J1", points: [[444, 222], [585, 222], [585, 210], [620, 210]] },
-    { id: "teacher-wire-Xn-K1", points: [[230, 270], [585, 270], [585, 250], [620, 250]] },
-    { id: "teacher-wire-X-J0", points: [[200, 100], [200, 432], [340, 432]], arrow: false },
-    { id: "teacher-wire-Q1n-feedback", points: [[770, 250], [785, 250], [785, 140], [1110, 140], [1110, 635], [320, 635], [320, 408], [340, 408]], arrow: false },
-    { id: "teacher-wire-J0", points: [[444, 422], [810, 422], [810, 210], [850, 210]] },
-    { id: "teacher-wire-CONST1-K0", points: [[724, 351], [830, 351], [830, 250], [850, 250]] },
-    { id: "teacher-wire-Q0-feedback", points: [[1000, 210], [1090, 210], [1090, 600], [300, 600], [300, 232]], arrow: false },
-    { id: "teacher-wire-Q0-to-ZTERM", points: [[300, 518], [680, 518]], arrow: false },
-    { id: "teacher-wire-Xn-ZTERM", points: [[230, 542], [680, 542]], arrow: false },
-    { id: "teacher-wire-ZTERM-OR", points: [[784, 532], [900, 532], [900, 548], [950, 548]] },
-    { id: "teacher-wire-Q1-Z", points: [[770, 210], [790, 210], [790, 522], [950, 522]], arrow: false },
-    { id: "teacher-wire-ORZ-Z", points: [[1060, 532], [1120, 532], [1120, 520], [1160, 520]] },
+    { id: "teacher-wire-X-NOT", points: [[120, 100], [120, 152], [110, 152]], arrow: false, ignoreBoxes: ["not-X"], rerouted: true },
+    { id: "teacher-wire-NOT-Xn", points: [[180, 152], [230, 152]], arrow: false, ignoreBoxes: ["not-X"], rerouted: true },
+    { id: "teacher-wire-Xn-J1", points: [[230, 208], [260, 208], [260, 180], [310, 180], [310, 208], [340, 208]], arrow: false, rerouted: true },
+    { id: "teacher-wire-Q0-to-J1", points: [[286, 232], [316, 232], [316, 260], [326, 260], [326, 232], [340, 232]], arrow: false, rerouted: true },
+    { id: "teacher-wire-J1", points: [[444, 222], [474, 222], [474, 176], [585, 176], [585, 210], [620, 210]], rerouted: true },
+    { id: "teacher-wire-Xn-K1", points: [[230, 270], [260, 270], [260, 294], [588, 294], [588, 250], [620, 250]], rerouted: true },
+    { id: "teacher-wire-X-J0", points: [[200, 100], [230, 100], [230, 468], [310, 468], [310, 432], [340, 432]], arrow: false, rerouted: true },
+    { id: "teacher-wire-Q1n-feedback", points: [[770, 250], [805, 250], [805, 124], [1130, 124], [1130, 652], [326, 652], [326, 408], [340, 408]], arrow: false, rerouted: true },
+    { id: "teacher-wire-J0", points: [[444, 422], [480, 422], [480, 300], [812, 300], [812, 210], [850, 210]], rerouted: true },
+    { id: "teacher-wire-CONST1-K0", points: [[724, 351], [760, 351], [760, 312], [834, 312], [834, 250], [850, 250]], rerouted: true },
+    { id: "teacher-wire-Q0-feedback", points: [[1000, 210], [1088, 210], [1088, 616], [286, 616], [286, 232]], arrow: false, rerouted: true },
+    { id: "teacher-wire-Q0-to-ZTERM", points: [[286, 518], [650, 518], [680, 518]], arrow: false, rerouted: true },
+    { id: "teacher-wire-Xn-ZTERM", points: [[230, 542], [260, 542], [260, 574], [650, 574], [650, 542], [680, 542]], arrow: false, rerouted: true },
+    { id: "teacher-wire-ZTERM-OR", points: [[784, 532], [820, 532], [820, 590], [920, 590], [920, 548], [950, 548]], rerouted: true },
+    { id: "teacher-wire-Q1-Z", points: [[770, 210], [810, 210], [810, 480], [918, 480], [918, 522], [950, 522]], arrow: false, rerouted: true },
+    { id: "teacher-wire-ORZ-Z", points: [[1060, 532], [1092, 532], [1092, 520], [1160, 520]], rerouted: true },
   ],
   junctions: [
     { id: "X-NOT", x: 120, y: 100 },
@@ -2202,21 +2273,21 @@ const TEACHER_SCHEMATIC_LAYOUT = {
     { id: "Xn-J1", x: 230, y: 208 },
     { id: "Xn-K1", x: 230, y: 270 },
     { id: "Xn-Z", x: 230, y: 542 },
-    { id: "Q0-trunk-bottom", x: 300, y: 600 },
-    { id: "Q0-J1", x: 300, y: 232 },
-    { id: "Q0-ZTERM", x: 300, y: 518 },
-    { id: "Q1-AND", x: 320, y: 408 },
-    { id: "Q1-OR2", x: 790, y: 522 },
+    { id: "Q0-trunk-bottom", x: 286, y: 616 },
+    { id: "Q0-J1", x: 286, y: 232 },
+    { id: "Q0-ZTERM", x: 286, y: 518 },
+    { id: "Q1-AND", x: 326, y: 408 },
+    { id: "Q1-OR2", x: 918, y: 522 },
   ],
   jumps: [
-    { id: "wire-jump-x-feedback", x: 1110, y: 532, orientation: "vertical-over-horizontal" },
-    { id: "wire-jump-xnot-q0", x: 300, y: 542, orientation: "vertical-over-horizontal" },
-    { id: "wire-jump-xnot-q1n", x: 320, y: 542, orientation: "vertical-over-horizontal" },
-    { id: "wire-jump-xn-k1-q0", x: 300, y: 270, orientation: "vertical-over-horizontal" },
-    { id: "wire-jump-x-j0-q0", x: 300, y: 432, orientation: "horizontal-over-vertical" },
-    { id: "wire-jump-x-j0-q1n", x: 320, y: 432, orientation: "horizontal-over-vertical" },
-    { id: "wire-jump-q0-zterm-q1n", x: 320, y: 518, orientation: "horizontal-over-vertical" },
-    { id: "wire-jump-q0-orz", x: 1090, y: 532, orientation: "vertical-over-horizontal" },
+    { id: "wire-jump-x-feedback", x: 810, y: 340, orientation: "vertical-over-horizontal" },
+    { id: "wire-jump-xnot-q0", x: 286, y: 542, orientation: "vertical-over-horizontal" },
+    { id: "wire-jump-xnot-q1n", x: 326, y: 542, orientation: "vertical-over-horizontal" },
+    { id: "wire-jump-xn-k1-q0", x: 286, y: 294, orientation: "vertical-over-horizontal" },
+    { id: "wire-jump-x-j0-q0", x: 286, y: 468, orientation: "horizontal-over-vertical" },
+    { id: "wire-jump-x-j0-q1n", x: 326, y: 432, orientation: "horizontal-over-vertical" },
+    { id: "wire-jump-q0-zterm-q1n", x: 326, y: 518, orientation: "horizontal-over-vertical" },
+    { id: "wire-jump-q0-orz", x: 1088, y: 532, orientation: "vertical-over-horizontal" },
   ],
 };
 
@@ -2308,6 +2379,7 @@ function renderTeacherWire(wire, collisionSet) {
   const wireElement = teacherWire(wire.id, teacherPointsToPath(wire.points), {
     arrow: wire.arrow,
     collision: collisionSet.has(wire.id),
+    rerouted: wire.rerouted,
   });
   if (wire.id === "teacher-wire-X-NOT") {
     const start = wire.points[0];
@@ -2562,7 +2634,11 @@ function renderTeacherStandardSchematic() {
             <text className="sr-only" key={collision}>{collision}</text>
           ))}
         </g>
-        {renderWireBodyCollisionGuard([...collisions, ...clkCollisions])}
+        {renderWireBodyCollisionGuard([...collisions, ...clkCollisions], {
+          reroutedWireCount:
+            layout.wires.filter((wire) => wire.rerouted).length +
+            Object.values(layout.clkTaps ?? {}).filter((tap) => tap.rerouted).length,
+        })}
         {renderWireCrossingGuard({ bridgeCount: layout.jumps.length, junctionCount: layout.junctions.length })}
         <g data-testid="gate-input-count-guard" data-violations="0">
           <rect fill="#1D4ED8" height="1" opacity="0.01" width="1" x="2" y="2" />
